@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+"""
+Anki add-on: Auto Images from Pexels
+
+Adds two entry points:
+- Tools -> Auto Images from Pexels (run over a deck)
+- Browser -> Edit -> Auto Images from Pexels (run over selected notes)
+
+Configuration is read from config.json next to this file.
+"""
+
+from aqt import mw
+from aqt.qt import QAction, qconnect
+
+
+def _open_tools_dialog() -> None:
+	from .tools import BackfillImagesDialog
+	dialog = BackfillImagesDialog(mw=mw, mode="deck", browser=None)
+	dialog.exec()
+
+
+def _open_browser_dialog(browser) -> None:
+	from .tools import BackfillImagesDialog
+	dialog = BackfillImagesDialog(mw=mw, mode="browser", browser=browser)
+	dialog.exec()
+
+
+def _setup_tools_menu() -> None:
+	action = QAction("Auto Images from Pexels", mw)
+	qconnect(action.triggered, _open_tools_dialog)
+	mw.form.menuTools.addAction(action)
+
+
+def _setup_browser_menu_with_gui_hooks() -> bool:
+	try:
+		from aqt import gui_hooks
+
+		def on_browser_menus_init(browser):
+			action = QAction("Auto Images from Pexels", browser)
+			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
+			browser.form.menuEdit.addAction(action)
+
+		def on_browser_context_menu(browser, menu):
+			action = QAction("Auto Images from Pexels", browser)
+			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
+			menu.addSeparator()
+			menu.addAction(action)
+
+		gui_hooks.browser_menus_did_init.append(on_browser_menus_init)
+		# Right-click context menu entry
+		try:
+			gui_hooks.browser_will_show_context_menu.append(on_browser_context_menu)
+		except Exception:
+			pass
+		return True
+	except Exception:
+		return False
+
+
+def _setup_browser_menu_with_legacy_hook() -> None:
+	try:
+		from anki.hooks import addHook
+
+		def on_browser_setup_menus(browser):
+			action = QAction("Auto Images from Pexels", browser)
+			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
+			browser.form.menuEdit.addAction(action)
+			# Context menu on older Anki (fallback)
+			try:
+				menu = browser.form.menuEdit
+				menu.addSeparator()
+				menu.addAction(action)
+			except Exception:
+				pass
+
+		addHook("browser.setupMenus", on_browser_setup_menus)
+	except Exception:
+		# Best-effort; older/newer Anki APIs may vary.
+		pass
+
+
+def _ensure_user_files_dir() -> None:
+	import os
+	base_dir = os.path.dirname(__file__)
+	user_files_dir = os.path.join(base_dir, "user_files")
+	try:
+		os.makedirs(user_files_dir, exist_ok=True)
+	except Exception:
+		pass
+
+
+def init_addon() -> None:
+	_ensure_user_files_dir()
+	_setup_tools_menu()
+	if not _setup_browser_menu_with_gui_hooks():
+		_setup_browser_menu_with_legacy_hook()
+
+
+# Initialize on import
+init_addon()
+
+

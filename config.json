@@ -1,0 +1,17 @@
+{
+ "pexels_api_key": "",
+ "default_per_page": 1,
+ "default_replace": false,
+ "pexels_locale": "ja-JP",
+ "pexels_orientation": null,
+ "pexels_size": null,
+ "query_prefix": "",
+ "query_suffix": "",
+ "append_photo_suffix": true,
+ "provider_preference": [
+  "google"
+ ],
+ "ddg_locale": "ja-jp",
+ "google_api_key": "REPLACE_WITH_YOUR_GOOGLE_API_KEY",
+ "google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX"
+}
