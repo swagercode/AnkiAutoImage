@@ -2,6 +2,8 @@
 
 Adds images to notes using Google Custom Search JSON API (image search). Run over selected notes from the Browser, or over an entire deck from Tools.
 
+If it's useful please star so employers think I'm cool.
+
 Menu entries in Anki:
 - Tools → Auto Images (Google) (run over a deck)
 - Browser → Edit → Auto Images (Google) (run over selected notes)
