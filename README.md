@@ -72,6 +72,11 @@ python test_fetch_images.py --query "猫" --count 5 --out test_images --provider
 
 This respects `config.json` (Google keys).
 
+## Example
+
+<img width="847" height="657" alt="image" src="https://github.com/user-attachments/assets/5f3a1d7e-02e0-468b-bf6e-2887e78c4413" />
+
+
 ## Attribution
 
 Inspired by the design and UX flow in the Yomitan backfill add-on: https://github.com/Manhhao/backfill-anki-yomitan
