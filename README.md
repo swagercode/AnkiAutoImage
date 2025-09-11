@@ -12,6 +12,10 @@ Menu entries in Anki:
 2. Edit `config.json` (see below) to set your Google API key and CSE id.
 3. Restart Anki.
 
+## Getting API Keys
+1. Google API key from this link: https://developers.google.com/custom-search/v1/overview
+2. CX Key from here: https://programmablesearchengine.google.com/controlpanel/create
+
 ## Configure
 
 Edit `config.json` (keys shown below):
