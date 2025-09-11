@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 """
-Anki add-on: Auto Images from Pexels
+Anki add-on: Auto Images (Google)
 
 Adds two entry points:
-- Tools -> Auto Images from Pexels (run over a deck)
-- Browser -> Edit -> Auto Images from Pexels (run over selected notes)
+- Tools -> Auto Images (Google) (run over a deck)
+- Browser -> Edit -> Auto Images (Google) (run over selected notes)
 
 Configuration is read from config.json next to this file.
 """
 
 from aqt import mw
-from aqt.qt import QAction, qconnect
+from aqt.qt import QAction, QKeySequence, QShortcut, qconnect
 
 
 def _open_tools_dialog() -> None:
@@ -27,7 +27,7 @@ def _open_browser_dialog(browser) -> None:
 
 
 def _setup_tools_menu() -> None:
-	action = QAction("Auto Images from Pexels", mw)
+	action = QAction("Auto Images (Google)", mw)
 	qconnect(action.triggered, _open_tools_dialog)
 	mw.form.menuTools.addAction(action)
 
@@ -37,12 +37,12 @@ def _setup_browser_menu_with_gui_hooks() -> bool:
 		from aqt import gui_hooks
 
 		def on_browser_menus_init(browser):
-			action = QAction("Auto Images from Pexels", browser)
+			action = QAction("Auto Images (Google)", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			browser.form.menuEdit.addAction(action)
 
 		def on_browser_context_menu(browser, menu):
-			action = QAction("Auto Images from Pexels", browser)
+			action = QAction("Auto Images (Google)", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			menu.addSeparator()
 			menu.addAction(action)
@@ -63,7 +63,7 @@ def _setup_browser_menu_with_legacy_hook() -> None:
 		from anki.hooks import addHook
 
 		def on_browser_setup_menus(browser):
-			action = QAction("Auto Images from Pexels", browser)
+			action = QAction("Auto Images (Google)", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			browser.form.menuEdit.addAction(action)
 			# Context menu on older Anki (fallback)
@@ -95,6 +95,23 @@ def init_addon() -> None:
 	_setup_tools_menu()
 	if not _setup_browser_menu_with_gui_hooks():
 		_setup_browser_menu_with_legacy_hook()
+	# Reviewer hotkey (configurable via config.json -> reviewer_hotkey)
+	try:
+		import json, os
+		base_dir = os.path.dirname(__file__)
+		cfg_path = os.path.join(base_dir, "config.json")
+		hotkey = "Ctrl+Shift+G"
+		try:
+			with open(cfg_path, "r", encoding="utf-8") as f:
+				cfg = json.load(f)
+				hotkey = str(cfg.get("reviewer_hotkey", hotkey)) or hotkey
+		except Exception:
+			pass
+		sc = QShortcut(QKeySequence(hotkey), mw)
+		from .tools import quick_add_image_for_current_card
+		qconnect(sc.activated, lambda: quick_add_image_for_current_card(mw))
+	except Exception:
+		pass
 
 
 # Initialize on import

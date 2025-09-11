@@ -38,6 +38,33 @@ def _read_config() -> Dict[str, Any]:
 		return {}
 
 
+def _user_files_dir() -> str:
+	base_dir = os.path.dirname(__file__)
+	user_files_dir = os.path.join(base_dir, "user_files")
+	os.makedirs(user_files_dir, exist_ok=True)
+	return user_files_dir
+
+
+def _last_settings_path() -> str:
+	return os.path.join(_user_files_dir(), "last_settings.json")
+
+
+def _read_last_settings() -> Dict[str, Any]:
+	try:
+		with open(_last_settings_path(), "r", encoding="utf-8") as f:
+			return json.load(f)
+	except Exception:
+		return {}
+
+
+def _write_last_settings(data: Dict[str, Any]) -> None:
+	try:
+		with open(_last_settings_path(), "w", encoding="utf-8") as f:
+			json.dump(data, f, ensure_ascii=False, indent=1)
+	except Exception:
+		pass
+
+
 class BackfillImagesDialog(QDialog):
 	def __init__(self, mw, mode: str, browser=None) -> None:
 		super().__init__(mw)
@@ -50,10 +77,7 @@ class BackfillImagesDialog(QDialog):
 		self._build_ui()
 
 	def _quota_path(self) -> str:
-		base_dir = os.path.dirname(__file__)
-		user_files_dir = os.path.join(base_dir, "user_files")
-		os.makedirs(user_files_dir, exist_ok=True)
-		return os.path.join(user_files_dir, "quota.json")
+		return os.path.join(_user_files_dir(), "quota.json")
 
 	def _now_pacific(self) -> datetime:
 		try:
@@ -125,18 +149,16 @@ class BackfillImagesDialog(QDialog):
 			row.addWidget(self.deck_combo)
 			layout.addLayout(row)
 
-		# Field selectors
+		# Field selectors (dropdowns populated from deck/selection)
 		row_q = QHBoxLayout()
 		row_q.addWidget(QLabel("Query Field"))
-		self.query_field = QLineEdit(self)
-		self.query_field.setPlaceholderText("e.g. Expression")
+		self.query_field = QComboBox(self)
 		row_q.addWidget(self.query_field)
 		layout.addLayout(row_q)
 
 		row_t = QHBoxLayout()
 		row_t.addWidget(QLabel("Target Field"))
-		self.target_field = QLineEdit(self)
-		self.target_field.setPlaceholderText("e.g. Picture")
+		self.target_field = QComboBox(self)
 		row_t.addWidget(self.target_field)
 		layout.addLayout(row_t)
 
@@ -184,6 +206,70 @@ class BackfillImagesDialog(QDialog):
 		qconnect(self.cancel_btn.clicked, self.reject)
 		qconnect(self.run_btn.clicked, self._on_run)
 
+		# Populate field dropdowns initially and on deck change
+		try:
+			self._refresh_field_dropdowns()
+		except Exception:
+			pass
+		if hasattr(self, "deck_combo"):
+			try:
+				qconnect(self.deck_combo.currentTextChanged, lambda _=None: self._refresh_field_dropdowns())
+			except Exception:
+				pass
+
+	def _collect_field_names(self, nids: List[int]) -> List[str]:
+		col = self.mw.col
+		seen: dict[str, None] = {}
+		for nid in nids[:1000]:  # cap for very large decks
+			try:
+				note = col.get_note(nid)
+				try:
+					for name in list(note.keys()):  # type: ignore[attr-defined]
+						if isinstance(name, str) and name and name not in seen:
+							seen[name] = None
+				except Exception:
+					# Fallback via model fields
+					try:
+						model = note.note_type()  # type: ignore[attr-defined]
+						for fld in (model or {}).get("flds", []):
+							name = fld.get("name")
+							if isinstance(name, str) and name and name not in seen:
+								seen[name] = None
+					except Exception:
+						pass
+			except Exception:
+				continue
+		return list(seen.keys())
+
+	def _refresh_field_dropdowns(self) -> None:
+		col = self.mw.col
+		if self.mode == "browser" and self.browser is not None:
+			nids = get_selected_note_ids(self.browser)
+		else:
+			deck_name = self.deck_combo.currentText() if hasattr(self, "deck_combo") else ""
+			nids = get_deck_note_ids(col, deck_name)
+		fields = self._collect_field_names(nids) if nids else []
+		# Reasonable defaults if empty
+		if not fields:
+			fields = ["Front", "Back", "Expression", "Picture"]
+
+		def _pick_default(candidates: List[str], preferred: List[str]) -> int:
+			for pref in preferred:
+				if pref in candidates:
+					return candidates.index(pref)
+			return 0
+
+		self.query_field.blockSignals(True)
+		self.target_field.blockSignals(True)
+		self.query_field.clear()
+		self.target_field.clear()
+		self.query_field.addItems(fields)
+		self.target_field.addItems(fields)
+		self.query_field.setCurrentIndex(_pick_default(fields, ["Expression", "Front", "Word", "Term"]))
+		self.target_field.setCurrentIndex(_pick_default(fields, ["Picture", "Image", "Images", "Back"]))
+		self.query_field.blockSignals(False)
+		self.target_field.blockSignals(False)
+
 	def _on_run(self) -> None:
 		api_key = self.cfg.get("pexels_api_key", "").strip()
 		provider_order = self.cfg.get("provider_preference", ["ddg", "pexels"]) or ["ddg", "pexels"]
@@ -200,8 +286,8 @@ class BackfillImagesDialog(QDialog):
 			showWarning("No providers available. Enable DDG or add a Pexels API key in config.json.")
 			return
 
-		query_field = self.query_field.text().strip()
-		target_field = self.target_field.text().strip()
+		query_field = (self.query_field.currentText().strip() if hasattr(self.query_field, "currentText") else str(self.query_field.text()).strip())
+		target_field = (self.target_field.currentText().strip() if hasattr(self.target_field, "currentText") else str(self.target_field.text()).strip())
 		replace = bool(self.replace_chk.isChecked())
 		per_page = int(self.per_page.value()) if hasattr(self, "per_page") else 1
 
@@ -361,6 +447,16 @@ class BackfillImagesDialog(QDialog):
 				note.flush()
 				updated += 1
 
+		# Save last used UI settings for reviewer hotkey
+		try:
+			_write_last_settings({
+				"query_field": query_field,
+				"target_field": target_field,
+				"suffix": (self.suffix_field.text().strip() if hasattr(self, "suffix_field") else "") or "イラスト",
+			})
+		except Exception:
+			pass
+
 		col.reset()
 		self.mw.reset()
 		self.logger.info(f"Updated {updated} notes for field '{target_field}'")
@@ -371,4 +467,101 @@ class BackfillImagesDialog(QDialog):
 		showInfo(f"Updated {updated} notes.")
 		self.accept()
 
+
+
+# Reviewer hotkey quick-add support
+
+def _quota_path_global() -> str:
+	return os.path.join(_user_files_dir(), "quota.json")
+
+
+def _increment_google_quota_global(inc: int) -> None:
+	try:
+		if inc <= 0:
+			return
+		try:
+			with open(_quota_path_global(), "r", encoding="utf-8") as f:
+				q = json.load(f)
+		except Exception:
+			q = {}
+		now = datetime.now(_TZ_LA) if _TZ_LA else datetime.utcnow()
+		today = now.strftime("%Y-%m-%d")
+		if q.get("date") != today:
+			q = {"date": today, "google_used": 0}
+		q["google_used"] = int(q.get("google_used", 0)) + inc
+		with open(_quota_path_global(), "w", encoding="utf-8") as f:
+			json.dump(q, f, ensure_ascii=False, indent=1)
+	except Exception:
+		pass
+
+
+def quick_add_image_for_current_card(mw) -> None:
+	"""Add a Google image to the current reviewer card using last-used/default settings.
+
+	Always overwrites the target field. Uses saved query/target/suffix if available.
+	"""
+	try:
+		if getattr(mw, "state", "") != "review" or not getattr(getattr(mw, "reviewer", None), "card", None):
+			showWarning("No active card to update.")
+			return
+		col = mw.col
+		card = mw.reviewer.card
+		note = col.get_note(card.nid)
+
+		cfg = _read_config()
+		last = _read_last_settings()
+
+		def _field_names(n) -> List[str]:
+			try:
+				return list(n.keys())  # type: ignore[attr-defined]
+			except Exception:
+				return []
+
+		fields = _field_names(note)
+		query_field = str(last.get("query_field") or ("Expression" if "Expression" in fields else ("Front" if "Front" in fields else (fields[0] if fields else "")))).strip()
+		target_field = str(last.get("target_field") or ("Picture" if "Picture" in fields else ("Image" if "Image" in fields else (fields[0] if fields else "")))).strip()
+		suffix_value = str(last.get("suffix") or cfg.get("ui_default_suffix", "イラスト")).strip() or "イラスト"
+		if not query_field or not target_field:
+			showWarning("Could not determine fields to update.")
+			return
+
+		q_text = get_field_value(note, query_field).strip()
+		if not q_text:
+			showInfo(f"Query field '{query_field}' is empty; nothing to do.")
+			return
+
+		prefix = str(cfg.get("query_prefix", ""))
+		suffix_cfg = str(cfg.get("query_suffix", ""))
+		query_text = f"{prefix}{q_text}{suffix_cfg}".strip()
+		if suffix_value and suffix_value not in query_text:
+			query_text = f"{query_text} {suffix_value}".strip()
+
+		key = str(cfg.get("google_api_key", "")).strip()
+		cx = str(cfg.get("google_cx", "")).strip()
+		if not key or not cx:
+			showWarning("Google API key or CX missing in config.json")
+			return
+
+		client = GoogleCSEClient(key, cx)
+		items = client.search_images(query_text, num=10, lr="lang_ja")
+		if not items:
+			showInfo("No images found.")
+			return
+		link = str(items[0].get("link") or "").strip()
+		if not link:
+			showInfo("No usable image link found.")
+			return
+		referer = items[0].get("image", {}).get("contextLink") or items[0].get("displayLink") or "https://www.google.com/"
+		content = client.download_image(link, referer=referer)
+		tail = link.split("/")[-1].split("?")[0] or "google.jpg"
+		filename_hint = ensure_media_filename_safe(tail)
+		media_name = col.media.write_data(filename_hint, content)
+		if add_image_to_note(note, target_field, media_name, replace=True):
+			note.flush()
+			_increment_google_quota_global(1)
+			col.reset()
+			mw.reset()
+			showInfo("Image added to current card.")
+	except Exception as e:
+		showWarning(f"Failed to add image: {e}")
 

@@ -13,5 +13,6 @@
  ],
  "ddg_locale": "ja-jp",
  "google_api_key": "REPLACE_WITH_YOUR_GOOGLE_API_KEY",
- "google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX"
+ "google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX",
+ "reviewer_hotkey": "Ctrl+Shift+G"
 }
