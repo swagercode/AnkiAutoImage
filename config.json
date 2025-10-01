@@ -1,10 +1,5 @@
 {
- "pexels_api_key": "",
- "default_per_page": 1,
  "default_replace": false,
- "pexels_locale": "ja-JP",
- "pexels_orientation": null,
- "pexels_size": null,
  "query_prefix": "",
  "query_suffix": "",
  "append_photo_suffix": true,
@@ -14,5 +9,17 @@
  "ddg_locale": "ja-jp",
  "google_api_key": "REPLACE_WITH_YOUR_GOOGLE_API_KEY",
  "google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX",
- "reviewer_hotkey": "Ctrl+Shift+G"
+ "reviewer_hotkey": "Ctrl+Shift+G",
+ "reviewer_hotkey_nadeshiko": "Ctrl+Shift+Y",
+ "reviewer_hotkey_genai": "Ctrl+Shift+U",
+ "nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
+ "nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
+ "nadeshiko_image_field": null,
+ "nadeshiko_audio_field": null,
+ "nadeshiko_query_suffix": "",
+ "google_genai_api_key": "REPLACE_WITH_YOUR_GENAI_API_KEY",
+ "google_genai_model": "models/imagen-4.0-fast-generate-001",
+ "google_genai_aspect_ratio": "1:1",
+ "google_genai_person_generation": "ALLOW_ALL",
+ "google_genai_prompt_template": "create an image to demonstrate the meaning of {term}"
 }

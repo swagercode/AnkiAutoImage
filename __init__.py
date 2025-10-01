@@ -11,7 +11,7 @@ Configuration is read from config.json next to this file.
 """
 
 from aqt import mw
-from aqt.qt import QAction, QKeySequence, QShortcut, qconnect
+from aqt.qt import QAction, QKeySequence, QShortcut, qconnect, Qt
 
 
 def _open_tools_dialog() -> None:
@@ -101,15 +101,41 @@ def init_addon() -> None:
 		base_dir = os.path.dirname(__file__)
 		cfg_path = os.path.join(base_dir, "config.json")
 		hotkey = "Ctrl+Shift+G"
+		hotkey2 = "Ctrl+Shift+Y"
+		hotkey3 = "Ctrl+Shift+U"
 		try:
 			with open(cfg_path, "r", encoding="utf-8") as f:
 				cfg = json.load(f)
 				hotkey = str(cfg.get("reviewer_hotkey", hotkey)) or hotkey
+				hotkey2 = str(cfg.get("reviewer_hotkey_nadeshiko", hotkey2)) or hotkey2
+				hotkey3 = str(cfg.get("reviewer_hotkey_genai", hotkey3)) or hotkey3
 		except Exception:
 			pass
 		sc = QShortcut(QKeySequence(hotkey), mw)
 		from .tools import quick_add_image_for_current_card
 		qconnect(sc.activated, lambda: quick_add_image_for_current_card(mw))
+		# Second hotkey for Nadeshiko image+audio
+		sc2 = QShortcut(QKeySequence(hotkey2), mw)
+		from .tools import quick_add_nadeshiko_for_current_card
+		qconnect(sc2.activated, lambda: quick_add_nadeshiko_for_current_card(mw))
+		# Third hotkey for Google GenAI image generation
+		sc3 = QShortcut(QKeySequence(hotkey3), mw)
+		from .tools import quick_add_google_genai_image_for_current_card
+		qconnect(sc3.activated, lambda: quick_add_google_genai_image_for_current_card(mw))
+		# Ensure shortcuts are global within the app window
+		try:
+			sc.setContext(Qt.ShortcutContext.ApplicationShortcut)
+			sc2.setContext(Qt.ShortcutContext.ApplicationShortcut)
+			sc3.setContext(Qt.ShortcutContext.ApplicationShortcut)
+		except Exception:
+			pass
+		# Keep references to prevent garbage collection
+		try:
+			if not hasattr(mw, "_autoimage_shortcuts"):
+				mw._autoimage_shortcuts = []
+			mw._autoimage_shortcuts.extend([sc, sc2, sc3])
+		except Exception:
+			pass
 	except Exception:
 		pass
 

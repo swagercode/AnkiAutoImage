@@ -84,6 +84,18 @@ def add_image_to_note(note: Note, field_name: str, media_filename: str, replace:
 	return True
 
 
+def add_audio_to_note(note: Note, field_name: str, media_filename: str, replace: bool) -> bool:
+	if field_name not in note:
+		return False
+	audio_tag = f"[sound:{media_filename}]"
+	cur = note[field_name]
+	if cur and not replace:
+		return False
+	# Preserve any existing HTML; audio tags are text
+	note[field_name] = audio_tag if replace or not cur else (cur + "\n" + audio_tag)
+	return True
+
+
 def get_field_value(note: Note, field_name: str) -> str:
 	try:
 		return note[field_name]
