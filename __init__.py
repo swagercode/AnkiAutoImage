@@ -114,8 +114,16 @@ def init_addon() -> None:
 		hotkey2 = "Ctrl+Shift+Y"
 		hotkey3 = "Ctrl+Shift+U"
 		try:
-			with open(cfg_path, "r", encoding="utf-8") as f:
-				cfg = json.load(f)
+			# Prefer Anki-managed config from meta.json
+			try:
+				pkg = os.path.basename(os.path.dirname(__file__))
+				cfg = mw.addonManager.getConfig(pkg) or {}
+			except Exception:
+				cfg = {}
+			# Fallback to bundled config.json
+			if not cfg:
+				with open(cfg_path, "r", encoding="utf-8") as f:
+					cfg = json.load(f)
 				hotkey = str(cfg.get("reviewer_hotkey", hotkey)) or hotkey
 				hotkey2 = str(cfg.get("reviewer_hotkey_nadeshiko", hotkey2)) or hotkey2
 				hotkey3 = str(cfg.get("reviewer_hotkey_genai", hotkey3)) or hotkey3

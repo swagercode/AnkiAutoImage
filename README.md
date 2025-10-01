@@ -15,12 +15,8 @@ Menu entries in Anki:
 
 ## Install
 
-1. Place this folder as an add-on in Anki's add-ons directory (or zip and import).
-2. If you plan to commit a ready-to-run build, vendor the dependencies:
-   - Run: `python tools/vendor_deps.py` (installs into `vendor/` from `vendor_requirements.txt`).
-   - Commit the `vendor/` directory so users don't need to `pip install`.
-3. Edit `config.json` (see below) for provider/API settings and hotkeys.
-4. Restart Anki.
+1. Place this folder as an add-on in Anki's add-ons directory
+2. Restart Anki.
 
 ## Getting API Keys
 1. Google API key from this link: https://developers.google.com/custom-search/v1/overview (Please keep in mind if you do more than 100 a day with google it will charge you)
@@ -46,6 +42,8 @@ Edit `config.json` (keys shown below):
 	"reviewer_hotkey_genai": "Ctrl+Shift+U",
 	"nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
 	"nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
+	"nadeshiko_min_length": 6,
+	"nadeshiko_max_length": 0,
 	"nadeshiko_image_field": null,
 	"nadeshiko_audio_field": null,
 	"nadeshiko_query_suffix": "",
@@ -67,6 +65,7 @@ Edit `config.json` (keys shown below):
 - `reviewer_hotkey_nadeshiko`: Quick-add Nadeshiko image+audio. Default `Ctrl+Shift+Y`.
 - `reviewer_hotkey_genai`: Quick-generate image via Google GenAI. Default `Ctrl+Shift+U`.
 - `nadeshiko_*`: API key and options. The add-on requests the longest sentence directly from the API (descending length) and uses the first result.
+- `nadeshiko_min_length` / `nadeshiko_max_length`: Optional length bounds forwarded to the API. `max_length=0` disables the upper bound. Defaults favor slightly longer-than-single-word results.
 - `google_genai_*`: Settings for Imagen generation (model, aspect ratio, person generation policy, prompt template).
 
 Notes on quota:
@@ -78,7 +77,7 @@ Notes on quota:
 - Enter `Query Field` (source text).
 - Provider:
   - Google/DDG/Yahoo: also select `Target Field` for the image.
-  - Nadeshiko: select image/audio/sentence fields; the API returns the longest sentence for the query.
+  - Nadeshiko: select image/audio/sentence fields; the API returns the longest sentence for the query within your configured length range, and the add-on will also write the sentence text.
   - Gemini (Google GenAI): select `Target Field`; generates an image with the configured prompt template.
 - Options: `Replace existing`, and an optional query suffix for Google (defaults to `イラスト`).
 - Click Run. The add-on saves media to Anki and writes `<img src="...">` or `[sound:...]` accordingly.
@@ -88,7 +87,13 @@ While reviewing (hotkeys):
 - Nadeshiko image+audio: `Ctrl+Shift+Y`
 - Google GenAI image: `Ctrl+Shift+U`
 
-Hotkeys use the last settings chosen in the dialog (per provider). Google and GenAI overwrite the target field when invoked via hotkey.
+Hotkeys use the last settings chosen in the dialog (per provider).
+
+Nadeshiko hotkey specifics:
+- Always overwrites image and audio fields when present, and also overwrites a sentence field with the returned sentence text.
+- Sentence field precedence: `Sentence` → `Text` → `Front` → `Expression` → the selected query field (if available).
+ 
+Google/GenAI hotkeys: always overwrite the target image field.
 
 If keys are missing, the dialog will warn you.
 

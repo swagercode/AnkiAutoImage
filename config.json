@@ -14,6 +14,8 @@
  "reviewer_hotkey_genai": "Ctrl+Shift+U",
  "nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
  "nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
+ "nadeshiko_min_length": 6,
+ "nadeshiko_max_length": 0,
  "nadeshiko_image_field": null,
  "nadeshiko_audio_field": null,
  "nadeshiko_query_suffix": "",

@@ -40,6 +40,8 @@ class NadeshikoApiClient:
 		season: Optional[List[int]] = None,
 		episode: Optional[List[int]] = None,
 		content_sort: Optional[str] = None,
+		min_length: Optional[int] = None,
+		max_length: Optional[int] = None,
 		random_seed: Optional[float] = None,
 		timeout: float = 30.0,
 	) -> Dict[str, Any]:
@@ -54,6 +56,10 @@ class NadeshikoApiClient:
 			payload["episode"] = episode
 		if content_sort in ("ASC", "DESC"):
 			payload["content_sort"] = content_sort
+		if isinstance(min_length, int) and min_length > 0:
+			payload["min_length"] = int(min_length)
+		if isinstance(max_length, int) and max_length > 0:
+			payload["max_length"] = int(max_length)
 		if random_seed is not None:
 			payload["random_seed"] = random_seed
 

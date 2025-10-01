@@ -31,14 +31,34 @@ from .nadeshiko_api import NadeshikoApiClient, NadeshikoApiError
 from .google_genai import GoogleGenAIClient, GoogleGenAIError
 
 
+def _addon_package_name() -> str:
+    try:
+        return os.path.basename(os.path.dirname(__file__))
+    except Exception:
+        return ""
+
+
 def _read_config() -> Dict[str, Any]:
-	base_dir = os.path.dirname(__file__)
-	config_path = os.path.join(base_dir, "config.json")
-	try:
-		with open(config_path, "r", encoding="utf-8") as f:
-			return json.load(f)
-	except Exception:
-		return {}
+    """Read configuration from Anki's add-on config (meta.json),
+    falling back to bundled config.json defaults if needed.
+    """
+    # 1) Try Anki-managed config (user-edited via Config dialog)
+    try:
+        pkg = _addon_package_name()
+        if pkg:
+            cfg = mw.addonManager.getConfig(pkg)  # type: ignore[attr-defined]
+            if isinstance(cfg, dict) and cfg:
+                return cfg
+    except Exception:
+        pass
+    # 2) Fallback to local config.json (defaults)
+    try:
+        base_dir = os.path.dirname(__file__)
+        config_path = os.path.join(base_dir, "config.json")
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def _user_files_dir() -> str:
@@ -314,6 +334,25 @@ def _strip_tags(text: str) -> str:
 	except Exception:
 		return text or ""
 
+
+def _nade_format_sentence(seg: Dict[str, Any], lang_code: str) -> str:
+	"""Return sentence text for the requested language, bolding the highlighted term.
+
+	Uses the API's *_highlight field if available (which wraps matches in <em>),
+	and converts <em>..</em> to <b>..</b>. Falls back to plain content if highlight
+	is missing.
+	"""
+	try:
+		lc = (lang_code or "jp").lower()
+		plain_key = f"content_{'en' if lc=='en' else ('es' if lc=='es' else 'jp')}"
+		hl_key = f"{plain_key}_highlight"
+		hl = str(seg.get(hl_key, "") or "").strip()
+		if hl:
+			return hl.replace("<em>", "<b>").replace("</em>", "</b>")
+		return str(seg.get(plain_key, "") or "").strip()
+	except Exception:
+		return str(seg.get("content_jp", "") or "").strip()
+
 def _nade_origin(base_url: str) -> str:
 	try:
 		p = urlparse(base_url)
@@ -541,7 +580,16 @@ def _on_run(self) -> None:
 					continue
 				base_url = str(self.cfg.get("nadeshiko_base_url", "https://api.brigadasos.xyz/api/v1")).strip() or "https://api.brigadasos.xyz/api/v1"
 				client = NadeshikoApiClient(key, base_url=base_url)
-				res = client.search_sentences(query=query_text, limit=1, content_sort="DESC")
+				# Ask API for the longest sentence, with a sensible minimum length
+				min_len = int(self.cfg.get("nadeshiko_min_length", 6))
+				max_len = int(self.cfg.get("nadeshiko_max_length", 0)) or None
+				res = client.search_sentences(
+					query=query_text,
+					limit=1,
+					content_sort="DESC",
+					min_length=min_len,
+					max_length=max_len,
+				)
 				sentences = (res or {}).get("sentences") or []
 				if not sentences:
 					nade_no_result += 1
@@ -553,27 +601,36 @@ def _on_run(self) -> None:
 				aud_field = (self.nade_audio_field.currentText().strip() if hasattr(self, "nade_audio_field") else target_field)
 				sent_field = (self.nade_sentence_field.currentText().strip() if hasattr(self, "nade_sentence_field") else query_field)
 				lang = str(self.cfg.get("nadeshiko_sentence_lang", "jp")).lower()
-				text = str(seg.get(f"content_{'en' if lang=='en' else ('es' if lang=='es' else 'jp')}") or "").strip()
+				text = _nade_format_sentence(seg, lang)
 				changed_sentence = False
 				if sent_field in note and (replace or not note[sent_field]):
 					note[sent_field] = text
 					changed_sentence = True
-				img_url = str(media_info.get("path_image", "")).strip()
+				# Normalize URLs as done in the reviewer hotkey path
+				img_url = _nade_normalize_url(media_info.get("path_image", ""), base_url)
+				audio_url = _nade_normalize_url(media_info.get("path_audio", ""), base_url)
+				# Download media independently so a failure in one does not prevent sentence-only updates
 				if img_url and img_field in note:
-					img_bytes = client.download(img_url)
-					tail = img_url.split("/")[-1].split("?")[0] or f"nade_{nid}.jpg"
-					media_name_img = media.write_data(ensure_media_filename_safe(tail), img_bytes)
-					if add_image_to_note(note, img_field, media_name_img, replace=replace):
-						note_changed = True
-				audio_url = str(media_info.get("path_audio", "")).strip()
+					try:
+						img_bytes = client.download(img_url)
+						tail = img_url.split("/")[-1].split("?")[0] or f"nade_{nid}.jpg"
+						media_name_img = media.write_data(ensure_media_filename_safe(tail), img_bytes)
+						if add_image_to_note(note, img_field, media_name_img, replace=replace):
+							note_changed = True
+					except Exception as e:
+						self.logger.error(f"Nadeshiko image download failed for '{q}': {e}")
 				if audio_url and aud_field in note:
-					aud_bytes = client.download(audio_url)
-					tail = audio_url.split("/")[-1].split("?")[0] or f"nade_{nid}.mp3"
-					media_name_aud = media.write_data(ensure_media_filename_safe(tail), aud_bytes)
-					if add_audio_to_note(note, aud_field, media_name_aud, replace=replace):
-						note_changed = True
+					try:
+						aud_bytes = client.download(audio_url)
+						tail = audio_url.split("/")[-1].split("?")[0] or f"nade_{nid}.mp3"
+						media_name_aud = media.write_data(ensure_media_filename_safe(tail), aud_bytes)
+						if add_audio_to_note(note, aud_field, media_name_aud, replace=replace):
+							note_changed = True
+					except Exception as e:
+						self.logger.error(f"Nadeshiko audio download failed for '{q}': {e}")
 				if changed_sentence:
 					note_changed = True
+				# Always flush any changes (including sentence-only)
 				note.flush()
 				if note_changed:
 					updated += 1
@@ -918,7 +975,16 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		suffix_cfg = str(cfg.get("nadeshiko_query_suffix", "")).strip()
 		query_text = f"{q_text} {suffix_cfg}".strip() if suffix_cfg else q_text
 
-		data = client.search_sentences(query=query_text, limit=1, content_sort="DESC")
+		# Ask API for the longest sentence, with a sensible minimum length
+		min_len = int(cfg.get("nadeshiko_min_length", 6))
+		max_len = int(cfg.get("nadeshiko_max_length", 0)) or None
+		data = client.search_sentences(
+			query=query_text,
+			limit=1,
+			content_sort="DESC",
+			min_length=min_len,
+			max_length=max_len,
+		)
 		sentences = (data or {}).get("sentences") or []
 		if not sentences:
 			showInfo("No Nadeshiko results found.")
@@ -928,7 +994,7 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		updated = False
 		seg = (item or {}).get("segment_info") or {}
 		lang = str(cfg.get("nadeshiko_sentence_lang", "jp")).lower()
-		text = str(seg.get(f"content_{'en' if lang=='en' else ('es' if lang=='es' else 'jp')}") or "").strip()
+		text = _nade_format_sentence(seg, lang)
 		if sentence_field and sentence_field in note:
 			note[sentence_field] = text
 			updated = True
