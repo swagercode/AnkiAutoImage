@@ -2,6 +2,8 @@
 
 Adds images to notes using Google Custom Search JSON API (image search). Run over selected notes from the Browser, or over an entire deck from Tools.
 
+If it's useful please star so employers think I'm cool.
+
 Menu entries in Anki:
 - Tools → Auto Images (Google) (run over a deck)
 - Browser → Edit → Auto Images (Google) (run over selected notes)
@@ -11,6 +13,10 @@ Menu entries in Anki:
 1. Place this folder as an add-on in Anki's add-ons directory (or zip and import).
 2. Edit `config.json` (see below) to set your Google API key and CSE id.
 3. Restart Anki.
+
+## Getting API Keys
+1. Google API key from this link: https://developers.google.com/custom-search/v1/overview
+2. CX Key from here: https://programmablesearchengine.google.com/controlpanel/create
 
 ## Configure
 
@@ -65,6 +71,11 @@ python test_fetch_images.py --query "猫" --count 5 --out test_images --provider
 ```
 
 This respects `config.json` (Google keys).
+
+## Example
+
+<img width="847" height="657" alt="image" src="https://github.com/user-attachments/assets/5f3a1d7e-02e0-468b-bf6e-2887e78c4413" />
+
 
 ## Attribution
 
