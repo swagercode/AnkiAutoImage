@@ -2,7 +2,7 @@
 
 Adds images to notes using multiple providers:
 - Google Custom Search JSON API (image search)
-- Nadeshiko (image + audio, picks the longest sentence)
+- Nadeshiko (image + audio, picks sentence length of your choice)
 - Google GenAI (Imagen) image generation
 
 Run over selected notes from the Browser, or over an entire deck from Tools.
