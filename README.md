@@ -5,7 +5,7 @@ Adds images to notes using multiple providers:
 - Nadeshiko (image + audio, picks sentence length of your choice)
 - Google GenAI (Imagen) image generation
 
-Run over selected notes from the Browser, or over an entire deck from Tools.
+Press one key while reviewing to update the current note, run over selected notes from the Browser, or over an entire deck from Tools.
 
 If it's useful please star so employers think I'm cool.
 
