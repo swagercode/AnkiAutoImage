@@ -863,6 +863,13 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 				if cand in fields:
 					audio_field = cand
 					break
+		# Determine sentence field, prefer commonly used names, else fall back
+		sentence_field = str(last_nade.get("sentence_field") or "").strip()
+		if not sentence_field:
+			for cand in ["Sentence", "Text", "Front", "Expression", query_field]:
+				if cand in fields:
+					sentence_field = cand
+					break
 
 		if not query_field or not image_field or not audio_field:
 			showWarning("Could not determine fields to update.")
@@ -890,15 +897,20 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 			showInfo("No Nadeshiko results found.")
 			return
 		item = sentences[0]
+		# Always write the sentence text, overwriting existing content
+		updated = False
+		seg = (item or {}).get("segment_info") or {}
+		lang = str(cfg.get("nadeshiko_sentence_lang", "jp")).lower()
+		text = str(seg.get(f"content_{'en' if lang=='en' else ('es' if lang=='es' else 'jp')}") or "").strip()
+		if sentence_field and sentence_field in note:
+			note[sentence_field] = text
+			updated = True
+
 		media_info = (item or {}).get("media_info") or {}
 		img_url = str(media_info.get("path_image", "")).strip()
 		audio_url = str(media_info.get("path_audio", "")).strip()
-		if not img_url and not audio_url:
-			showInfo("Nadeshiko item lacks media URLs.")
-			return
 
 		media = col.media
-		updated = False
 		# Download and add image
 		if img_url:
 			img_bytes = client.download(img_url)
@@ -921,7 +933,7 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 			note.flush()
 			col.reset()
 			mw.reset()
-			showInfo("Nadeshiko media added to current card.")
+			showInfo("Nadeshiko media (and sentence) added to current card.")
 		else:
 			showInfo("Nothing was updated.")
 	except Exception as e:
