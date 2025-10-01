@@ -25,36 +25,40 @@ Menu entries in Anki:
 3. Nadeshiko API key here: https://nadeshiko.co/settings/developer (I personally use nadeshiko the most)
 
 ## Configure
-
-Edit `config.json` (keys shown below):
+Edit settings inside Anki:
+- In Anki go to: Tools → Add-ons → Auto Images → Config
 
 ```
 {
-	"default_replace": false,
-	"query_prefix": "",
-	"query_suffix": "",
-	"append_photo_suffix": true,
-	"provider_preference": ["google"],
-	"ddg_locale": "ja-jp",
-	"google_api_key": "REPLACE_WITH_YOUR_GOOGLE_API_KEY",
-	"google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX",
-	"reviewer_hotkey": "Ctrl+Shift+G",
-	"reviewer_hotkey_nadeshiko": "Ctrl+Shift+Y",
-	"reviewer_hotkey_genai": "Ctrl+Shift+U",
-	"nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
-	"nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
-	"nadeshiko_min_length": 6,
-	"nadeshiko_max_length": 0,
-	"nadeshiko_image_field": null,
-	"nadeshiko_audio_field": null,
-	"nadeshiko_query_suffix": "",
-	"google_genai_api_key": "REPLACE_WITH_YOUR_GENAI_API_KEY",
-	"google_genai_model": "models/imagen-4.0-fast-generate-001",
-	"google_genai_aspect_ratio": "1:1",
-	"google_genai_person_generation": "ALLOW_ALL",
-	"google_genai_prompt_template": "create an image to demonstrate the meaning of {term}"
+    "append_photo_suffix": true,
+    "ddg_locale": "ja-jp",
+    "default_replace": false,
+    "google_api_key": "REPLACE_WITH_YOUR_GOOGLE_API_KEY",
+    "google_cx": "REPLACE_WITH_YOUR_GOOGLE_CX",
+    "google_genai_api_key": "REPLACE_WITH_YOUR_GENAI_API_KEY",
+    "google_genai_aspect_ratio": "1:1",
+    "google_genai_model": "models/imagen-4.0-fast-generate-001",
+    "google_genai_person_generation": "ALLOW_ALL",
+    "google_genai_prompt_template": "create an image to demonstrate the meaning of {term}",
+    "nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
+    "nadeshiko_audio_field": null,
+    "nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
+    "nadeshiko_image_field": null,
+    "nadeshiko_max_length": 0,
+    "nadeshiko_min_length": 6,
+    "nadeshiko_query_suffix": "",
+    "provider_preference": [
+        "google"
+    ],
+    "query_prefix": "",
+    "query_suffix": "",
+    "reviewer_hotkey": "Ctrl+Shift+G",
+    "reviewer_hotkey_genai": "Ctrl+Shift+U",
+    "reviewer_hotkey_nadeshiko": "Ctrl+Shift+Y"
 }
 ```
+
+Note: The bundled `config.json` is a fallback for defaults. If you edit it, Anki’s add-on configuration (set via the dialog above) will still take precedence.
 
 - `default_replace`: If true, overwrite the Target Field instead of appending.
 - `query_prefix` / `query_suffix`: Prepended/appended to the field text when searching.
@@ -77,7 +81,7 @@ Notes on quota:
 - Open the dialog, choose a deck (Tools) or select notes (Browser).
 - Enter `Query Field` (source text).
 - Provider:
-  - Google/DDG/Yahoo: also select `Target Field` for the image.
+  - Google: also select `Target Field` for the image.
   - Nadeshiko: select image/audio/sentence fields; the API returns the longest sentence for the query within your configured length range, and the add-on will also write the sentence text.
   - Gemini (Google GenAI): select `Target Field`; generates an image with the configured prompt template.
 - Options: `Replace existing`, and an optional query suffix for Google (defaults to `イラスト`).
