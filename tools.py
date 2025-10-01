@@ -5,6 +5,7 @@ import json
 from typing import Any, Dict, List, Optional
 import re
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 try:
 	from zoneinfo import ZoneInfo  # Python 3.9+
 	_TZ_LA = ZoneInfo("America/Los_Angeles")
@@ -312,6 +313,32 @@ def _strip_tags(text: str) -> str:
 		return re.sub(r"<[^>]+>", "", text or "")
 	except Exception:
 		return text or ""
+
+def _nade_origin(base_url: str) -> str:
+	try:
+		p = urlparse(base_url)
+		if p.scheme and p.netloc:
+			return f"{p.scheme}://{p.netloc}"
+	except Exception:
+		pass
+	# Fallback: strip known '/api/...' suffixes
+	base = str(base_url or "").strip()
+	idx = base.find("/api/")
+	return base[:idx] if idx != -1 else base.rstrip("/")
+
+
+def _nade_normalize_url(url: str, base_url: str) -> str:
+	u = str(url or "").strip()
+	if not u:
+		return u
+	# Replace backslashes with forward slashes (API sometimes returns '\\')
+	u = u.replace("\\", "/")
+	if u.startswith("http://") or u.startswith("https://"):
+		return u
+	origin = _nade_origin(base_url)
+	if u.startswith("/"):
+		return f"{origin}{u}"
+	return f"{origin}/{u}"
 
 
 def _nadeshiko_pick_sentence(sentences: List[Dict[str, Any]], term: str) -> Optional[Dict[str, Any]]:
@@ -907,8 +934,8 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 			updated = True
 
 		media_info = (item or {}).get("media_info") or {}
-		img_url = str(media_info.get("path_image", "")).strip()
-		audio_url = str(media_info.get("path_audio", "")).strip()
+		img_url = _nade_normalize_url(media_info.get("path_image", ""), base_url)
+		audio_url = _nade_normalize_url(media_info.get("path_audio", ""), base_url)
 
 		media = col.media
 		# Download and add image
