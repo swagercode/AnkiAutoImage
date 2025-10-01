@@ -14,9 +14,10 @@ Menu entries in Anki:
 - Browser → Edit → Auto Images (Google) (run over selected notes)
 
 ## Install
+1. Import the addon through Anki
+2. Update config with your API keys
+3. Before using the mid-review hotkey, make sure to **run it at least once through the browser** as the review hotkey will use your last used settings from there
 
-1. Place this folder as an add-on in Anki's add-ons directory
-2. Restart Anki.
 
 ## Getting API Keys
 1. Google API key from this link: https://developers.google.com/custom-search/v1/overview (Please keep in mind if you do more than 100 a day with google it will charge you)
