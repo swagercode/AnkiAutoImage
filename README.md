@@ -25,7 +25,6 @@ Menu entries in Anki:
 3. Nadeshiko API key here: https://nadeshiko.co/settings/developer (I personally use nadeshiko the most)
 
 ## Configure
-Edit settings inside Anki:
 - In Anki go to: Tools → Add-ons → Auto Images → Config
 
 ```
