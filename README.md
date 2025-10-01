@@ -2,8 +2,6 @@
 
 Adds images to notes using multiple providers:
 - Google Custom Search JSON API (image search)
-- DuckDuckGo Images
-- Yahoo Images (with optional Playwright scraping)
 - Nadeshiko (image + audio, picks the longest sentence)
 - Google GenAI (Imagen) image generation
 
@@ -22,8 +20,9 @@ Menu entries in Anki:
 3. Restart Anki.
 
 ## Getting API Keys
-1. Google API key from this link: https://developers.google.com/custom-search/v1/overview
+1. Google API key from this link: https://developers.google.com/custom-search/v1/overview (Please keep in mind if you do more than 100 a day with google it will charge you)
 2. CX Key from here: https://programmablesearchengine.google.com/controlpanel/create
+3. Nadeshiko API key here: https://nadeshiko.co/settings/developer (I personally use nadeshiko the most)
 
 ## Configure
 
