@@ -18,8 +18,11 @@ Menu entries in Anki:
 ## Install
 
 1. Place this folder as an add-on in Anki's add-ons directory (or zip and import).
-2. Edit `config.json` (see below) for provider/API settings and hotkeys.
-3. Restart Anki.
+2. If you plan to commit a ready-to-run build, vendor the dependencies:
+   - Run: `python tools/vendor_deps.py` (installs into `vendor/` from `vendor_requirements.txt`).
+   - Commit the `vendor/` directory so users don't need to `pip install`.
+3. Edit `config.json` (see below) for provider/API settings and hotkeys.
+4. Restart Anki.
 
 ## Getting API Keys
 1. Google API key from this link: https://developers.google.com/custom-search/v1/overview
