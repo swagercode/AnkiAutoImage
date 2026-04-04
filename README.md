@@ -1,4 +1,4 @@
-# Disclaimer: Google Search API is just got deprecated but Nadeshiko is still good.
+# Disclaimer: Google Search API is now deprecated but Nadeshiko is still good.
 
 
 
