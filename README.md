@@ -1,3 +1,7 @@
+# Disclaimer: Google Search API is just got deprecated but Nadeshiko is still good.
+
+
+
 # Auto Images — Anki Add-on
 
 Adds images to notes using multiple providers:
