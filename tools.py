@@ -5,7 +5,6 @@ import json
 from typing import Any, Dict, List, Optional
 import re
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
 try:
 	from zoneinfo import ZoneInfo  # Python 3.9+
 	_TZ_LA = ZoneInfo("America/Los_Angeles")
@@ -335,72 +334,45 @@ def _strip_tags(text: str) -> str:
 		return text or ""
 
 
-def _nade_format_sentence(seg: Dict[str, Any], lang_code: str) -> str:
+def _nade_format_sentence(segment: Dict[str, Any], lang_code: str) -> str:
 	"""Return sentence text for the requested language, bolding the highlighted term.
 
-	Uses the API's *_highlight field if available (which wraps matches in <em>),
-	and converts <em>..</em> to <b>..</b>. Falls back to plain content if highlight
+	Uses the v2 API format: textJa/textEn/textEs with content and highlight fields.
+	Converts <em>..</em> to <b>..</b>. Falls back to plain content if highlight
 	is missing.
 	"""
 	try:
 		lc = (lang_code or "jp").lower()
-		plain_key = f"content_{'en' if lc=='en' else ('es' if lc=='es' else 'jp')}"
-		hl_key = f"{plain_key}_highlight"
-		hl = str(seg.get(hl_key, "") or "").strip()
+		text_key = f"text{'En' if lc == 'en' else ('Es' if lc == 'es' else 'Ja')}"
+		text_obj = segment.get(text_key) or {}
+		hl = str(text_obj.get("highlight", "") or "").strip()
 		if hl:
 			return hl.replace("<em>", "<b>").replace("</em>", "</b>")
-		return str(seg.get(plain_key, "") or "").strip()
+		return str(text_obj.get("content", "") or "").strip()
 	except Exception:
-		return str(seg.get("content_jp", "") or "").strip()
+		return str((segment.get("textJa") or {}).get("content", "") or "").strip()
 
-def _nade_origin(base_url: str) -> str:
-	try:
-		p = urlparse(base_url)
-		if p.scheme and p.netloc:
-			return f"{p.scheme}://{p.netloc}"
-	except Exception:
-		pass
-	# Fallback: strip known '/api/...' suffixes
-	base = str(base_url or "").strip()
-	idx = base.find("/api/")
-	return base[:idx] if idx != -1 else base.rstrip("/")
+def _nadeshiko_pick_segment(segments: List[Dict[str, Any]], term: str) -> Optional[Dict[str, Any]]:
+	"""Return the segment with the longest Japanese text content.
 
-
-def _nade_normalize_url(url: str, base_url: str) -> str:
-	u = str(url or "").strip()
-	if not u:
-		return u
-	# Replace backslashes with forward slashes (API sometimes returns '\\')
-	u = u.replace("\\", "/")
-	if u.startswith("http://") or u.startswith("https://"):
-		return u
-	origin = _nade_origin(base_url)
-	if u.startswith("/"):
-		return f"{origin}{u}"
-	return f"{origin}/{u}"
-
-
-def _nadeshiko_pick_sentence(sentences: List[Dict[str, Any]], term: str) -> Optional[Dict[str, Any]]:
-	"""Return the sentence item with the longest text content.
-
-	Ignores the search term and prefers the item whose Japanese sentence
-	(content_jp or content_jp_highlight stripped) is longest.
+	Ignores the search term and prefers the segment whose Japanese text
+	(textJa.content or textJa.highlight stripped) is longest.
 	"""
 	best = None
 	best_len = -1
-	for it in (sentences or []):
+	for seg in (segments or []):
 		try:
-			seg = (it or {}).get("segment_info") or {}
-			jp = str(seg.get("content_jp", ""))
-			hl = _strip_tags(str(seg.get("content_jp_highlight", "")))
+			text_ja = (seg or {}).get("textJa") or {}
+			jp = str(text_ja.get("content", ""))
+			hl = _strip_tags(str(text_ja.get("highlight", "")))
 			cand = jp if len(jp) >= len(hl) else hl
 			l = len(cand)
 			if l > best_len:
-				best = it
+				best = seg
 				best_len = l
 		except Exception:
 			continue
-	return best if best is not None else (sentences[0] if sentences else None)
+	return best if best is not None else (segments[0] if segments else None)
 
 
 def _collect_field_names(self, nids: List[int]) -> List[str]:
@@ -578,37 +550,35 @@ def _on_run(self) -> None:
 				key = str(self.cfg.get("nadeshiko_api_key", "")).strip()
 				if not key:
 					continue
-				base_url = str(self.cfg.get("nadeshiko_base_url", "https://api.brigadasos.xyz/api/v1")).strip() or "https://api.brigadasos.xyz/api/v1"
+				base_url = str(self.cfg.get("nadeshiko_base_url", "https://api.nadeshiko.co/v1")).strip() or "https://api.nadeshiko.co/v1"
 				client = NadeshikoApiClient(key, base_url=base_url)
 				# Ask API for the longest sentence, with a sensible minimum length
 				min_len = int(self.cfg.get("nadeshiko_min_length", 6))
 				max_len = int(self.cfg.get("nadeshiko_max_length", 0)) or None
-				res = client.search_sentences(
+				res = client.search(
 					query=query_text,
-					limit=1,
-					content_sort="DESC",
+					take=1,
+					sort_mode="DESC",
 					min_length=min_len,
 					max_length=max_len,
 				)
-				sentences = (res or {}).get("sentences") or []
-				if not sentences:
+				segments = (res or {}).get("segments") or []
+				if not segments:
 					nade_no_result += 1
 					continue
-				it = sentences[0]
-				seg = (it or {}).get("segment_info") or {}
-				media_info = (it or {}).get("media_info") or {}
+				segment = segments[0]
+				urls = segment.get("urls") or {}
 				img_field = (self.nade_image_field.currentText().strip() if hasattr(self, "nade_image_field") else target_field)
 				aud_field = (self.nade_audio_field.currentText().strip() if hasattr(self, "nade_audio_field") else target_field)
 				sent_field = (self.nade_sentence_field.currentText().strip() if hasattr(self, "nade_sentence_field") else query_field)
 				lang = str(self.cfg.get("nadeshiko_sentence_lang", "jp")).lower()
-				text = _nade_format_sentence(seg, lang)
+				text = _nade_format_sentence(segment, lang)
 				changed_sentence = False
 				if sent_field in note and (replace or not note[sent_field]):
 					note[sent_field] = text
 					changed_sentence = True
-				# Normalize URLs as done in the reviewer hotkey path
-				img_url = _nade_normalize_url(media_info.get("path_image", ""), base_url)
-				audio_url = _nade_normalize_url(media_info.get("path_audio", ""), base_url)
+				img_url = str(urls.get("imageUrl", "") or "").strip()
+				audio_url = str(urls.get("audioUrl", "") or "").strip()
 				# Download media independently so a failure in one does not prevent sentence-only updates
 				if img_url and img_field in note:
 					try:
@@ -968,7 +938,7 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		if not key:
 			showWarning("Missing nadeshiko_api_key in config.json")
 			return
-		base_url = str(cfg.get("nadeshiko_base_url", "https://api.brigadasos.xyz/api/v1")).strip() or "https://api.brigadasos.xyz/api/v1"
+		base_url = str(cfg.get("nadeshiko_base_url", "https://api.nadeshiko.co/v1")).strip() or "https://api.nadeshiko.co/v1"
 		client = NadeshikoApiClient(key, base_url=base_url)
 
 		# Optional suffix
@@ -978,30 +948,29 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		# Ask API for the longest sentence, with a sensible minimum length
 		min_len = int(cfg.get("nadeshiko_min_length", 6))
 		max_len = int(cfg.get("nadeshiko_max_length", 0)) or None
-		data = client.search_sentences(
+		data = client.search(
 			query=query_text,
-			limit=1,
-			content_sort="DESC",
+			take=1,
+			sort_mode="DESC",
 			min_length=min_len,
 			max_length=max_len,
 		)
-		sentences = (data or {}).get("sentences") or []
-		if not sentences:
+		segments = (data or {}).get("segments") or []
+		if not segments:
 			showInfo("No Nadeshiko results found.")
 			return
-		item = sentences[0]
+		segment = segments[0]
 		# Always write the sentence text, overwriting existing content
 		updated = False
-		seg = (item or {}).get("segment_info") or {}
 		lang = str(cfg.get("nadeshiko_sentence_lang", "jp")).lower()
-		text = _nade_format_sentence(seg, lang)
+		text = _nade_format_sentence(segment, lang)
 		if sentence_field and sentence_field in note:
 			note[sentence_field] = text
 			updated = True
 
-		media_info = (item or {}).get("media_info") or {}
-		img_url = _nade_normalize_url(media_info.get("path_image", ""), base_url)
-		audio_url = _nade_normalize_url(media_info.get("path_audio", ""), base_url)
+		urls = segment.get("urls") or {}
+		img_url = str(urls.get("imageUrl", "") or "").strip()
+		audio_url = str(urls.get("audioUrl", "") or "").strip()
 
 		media = col.media
 		# Download and add image

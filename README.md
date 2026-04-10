@@ -45,7 +45,7 @@ Menu entries in Anki:
     "google_genai_prompt_template": "create an image to demonstrate the meaning of {term}",
     "nadeshiko_api_key": "REPLACE_WITH_YOUR_NADESHIKO_API_KEY",
     "nadeshiko_audio_field": null,
-    "nadeshiko_base_url": "https://api.brigadasos.xyz/api/v1",
+    "nadeshiko_base_url": "https://api.nadeshiko.co/v1",
     "nadeshiko_image_field": null,
     "nadeshiko_max_length": 0,
     "nadeshiko_min_length": 6,
