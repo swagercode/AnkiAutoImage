@@ -7,7 +7,6 @@ import re
 import sys
 from typing import Any, Dict, List, Optional
 
-from ddg_api import DuckDuckGoClient
 from yahoo_api import YahooImagesClient
 from google_cse import GoogleCSEClient
 try:
@@ -37,33 +36,6 @@ def save_bytes(path: str, content: bytes) -> None:
 	os.makedirs(os.path.dirname(path), exist_ok=True)
 	with open(path, "wb") as f:
 		f.write(content)
-
-
-def fetch_with_ddg(query: str, count: int, out_dir: str, cfg: Dict[str, Any]) -> int:
-	client = DuckDuckGoClient(locale=str(cfg.get("ddg_locale", "ja-jp")))
-	items = client.search_images(query, max_results=max(50, count * 5))
-	seen_urls: set[str] = set()
-	saved = 0
-	for idx, item in enumerate(items):
-		url = (item.get("image") or "").strip()
-		if not url or url in seen_urls:
-			continue
-		try:
-			content = client.download_image(url)
-			tail = url.split("/")[-1].split("?")[0]
-			if not tail or "." not in tail:
-				tail = f"ddg_{idx}.jpg"
-			filename = ensure_filename_safe(tail)
-			path = os.path.join(out_dir, filename)
-			save_bytes(path, content)
-			saved += 1
-			seen_urls.add(url)
-			print(f"DDG: saved {path}")
-			if saved >= count:
-				break
-		except Exception as e:
-			print(f"DDG download failed: {e}")
-	return saved
 
 
 def fetch_with_yahoo(query: str, count: int, out_dir: str, cfg: Dict[str, Any]) -> int:
@@ -136,7 +108,7 @@ def main() -> None:
 	parser.add_argument("--query", required=True, help="Search query text")
 	parser.add_argument("--count", type=int, default=5, help="How many images to save")
 	parser.add_argument("--out", default="test_images", help="Output directory")
-	parser.add_argument("--provider", default="auto", choices=["auto", "ddg", "pexels", "yahoo", "google"], help="Provider to use")
+	parser.add_argument("--provider", default="auto", choices=["auto", "pexels", "yahoo", "google"], help="Provider to use")
 	args = parser.parse_args()
 
 	base_dir = os.path.dirname(__file__)
@@ -155,7 +127,7 @@ def main() -> None:
 	saved = 0
 	order: List[str]
 	if args.provider == "auto":
-		order = cfg.get("provider_preference", ["ddg", "pexels"]) or ["ddg", "pexels"]
+		order = cfg.get("provider_preference", ["yahoo"]) or ["yahoo"]
 	else:
 		order = [args.provider]
 
@@ -163,9 +135,7 @@ def main() -> None:
 		if saved >= args.count:
 			break
 		remaining = args.count - saved
-		if provider == "ddg":
-			saved += fetch_with_ddg(query, remaining, out_dir, cfg)
-		elif provider == "pexels":
+		if provider == "pexels":
 			saved += fetch_with_pexels(query, remaining, out_dir, cfg)
 		elif provider == "yahoo":
 			saved += fetch_with_yahoo(query, remaining, out_dir, cfg)

@@ -39,7 +39,10 @@ class YahooImagesClient:
 			text = resp.text
 			# Extract original image URLs from "imgurl=" query param in result links
 			for enc in re.findall(r"imgurl=([^&\"]+)", text):
-				u = unquote(enc)
+				# Yahoo currently separates imgurl metadata with escaped \u0026.
+				# Strip that before unquoting so refurl/title fields don't become part of the image URL.
+				enc = enc.split(r"\u0026", 1)[0]
+				u = unquote(enc).split(r"\u0026", 1)[0]
 				if u.startswith("http") and u not in urls:
 					urls.append(u)
 					if len(urls) >= max_results:

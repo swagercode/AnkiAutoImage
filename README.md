@@ -3,7 +3,7 @@
 # Auto Images - Anki Add-on
 
 Adds media to Anki notes from:
-- DuckDuckGo/Yahoo image backfill, with legacy Google Custom Search support for existing Google setups
+- Yahoo image backfill, with legacy Google Custom Search support
 - Nadeshiko sentence image/audio/text
 - Gemini Image generation through Google GenAI
 
@@ -13,15 +13,15 @@ Adds media to Anki notes from:
 3. Run `Tools -> AutoImage -> Run` or `Browser -> Edit -> Auto Images` once before using review hotkeys, so the hotkeys can reuse your selected fields.
 
 ## API Keys
-- Nadeshiko: https://nadeshiko.co/settings/developer
+- Nadeshiko: https://nadeshiko.co/user/developer
 - Gemini API: https://aistudio.google.com/apikey
-- Legacy Google image search: https://developers.google.com/custom-search/v1/overview and `cx` from https://programmablesearchengine.google.com/controlpanel/create
+- Legacy Google image search: https://developers.google.com/custom-search/v1/introduction and `cx` from https://programmablesearchengine.google.com/controlpanel/all
 
 ## Settings
 Open `Tools -> AutoImage -> Settings`. The settings UI is also used by Anki's add-on `Config` button.
 
 Tabs:
-- `General`: replace behavior, image-search provider order, DuckDuckGo region, and shared query prefix/suffix settings.
+- `General`: replace behavior, image-search provider order, and shared query prefix/suffix settings.
 - `Legacy Google`: Google Custom Search API key and Programmable Search engine ID for existing Google setups.
 - `Nadeshiko`: API key, sentence length bounds, default media/sentence fields, sentence languages, and query suffix.
 - `Gemini Image`: Gemini API key, image model, aspect ratio, person-generation policy, and prompt template.
@@ -37,6 +37,8 @@ See [config.json](config.json) for the shipped defaults. Advanced users can stil
   - `Nadeshiko`: image/audio/sentence fields, with optional `Sentence EN Field`.
   - `Gemini Image`: generated image written to the target field.
 - Click `Run`.
+
+Yahoo is the default no-key image-search provider.
 
 Review hotkeys:
 - Image search backfill: `Ctrl+Shift+G`

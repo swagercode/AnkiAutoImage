@@ -4,9 +4,8 @@
  "query_suffix": "",
  "append_photo_suffix": true,
  "provider_preference": [
-  "google"
+  "yahoo"
  ],
- "ddg_locale": "ja-jp",
  "google_api_key": "",
  "google_cx": "",
  "reviewer_hotkey": "Ctrl+Shift+G",

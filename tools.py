@@ -13,13 +13,12 @@ except Exception:
 
 from aqt.qt import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QCheckBox, QSpinBox
 from aqt.qt import QDialogButtonBox, QFormLayout, QScrollArea, QWidget
-from aqt.qt import QTabWidget
+from aqt.qt import QKeySequence, QKeySequenceEdit, QTabWidget
 from aqt.qt import qconnect
 from aqt import mw
-from aqt.utils import showInfo, showWarning
+from aqt.utils import openLink, showInfo, showWarning
 
 from .logger import get_logger
-from .ddg_api import DuckDuckGoClient, DuckDuckGoError
 from .yahoo_api import YahooImagesClient, YahooImagesError
 from .google_cse import GoogleCSEClient
 try:
@@ -49,7 +48,7 @@ def _read_config() -> Dict[str, Any]:
         if pkg:
             cfg = mw.addonManager.getConfig(pkg)  # type: ignore[attr-defined]
             if isinstance(cfg, dict) and cfg:
-                return cfg
+                return _normalize_config(cfg)
     except Exception:
         pass
     # 2) Fallback to local config.json (defaults)
@@ -57,9 +56,20 @@ def _read_config() -> Dict[str, Any]:
         base_dir = os.path.dirname(__file__)
         config_path = os.path.join(base_dir, "config.json")
         with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            return _normalize_config(data if isinstance(data, dict) else {})
     except Exception:
         return {}
+
+
+def _normalize_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+	out = dict(cfg)
+	out.pop("ddg_locale", None)
+	for key in ("google_api_key", "google_cx", "google_genai_api_key", "nadeshiko_api_key"):
+		value = str(out.get(key, "") or "").strip()
+		if value.upper().startswith("REPLACE_"):
+			out[key] = ""
+	return out
 
 
 def _read_default_config() -> Dict[str, Any]:
@@ -129,7 +139,6 @@ class ProviderOrderWidget(QWidget):
 		for idx in range(3):
 			combo = QComboBox(self)
 			combo.addItem("None", "")
-			combo.addItem("DuckDuckGo", "ddg")
 			combo.addItem("Yahoo", "yahoo")
 			combo.addItem("Google", "google")
 			if idx < len(providers):
@@ -163,14 +172,9 @@ class SettingsDialog(QDialog):
 		("General", [
 			"default_replace",
 			"provider_preference",
-			"ddg_locale",
 			"query_prefix",
 			"query_suffix",
 			"append_photo_suffix",
-		]),
-		("Legacy Google", [
-			"google_api_key",
-			"google_cx",
 		]),
 		("Nadeshiko", [
 			"nadeshiko_api_key",
@@ -195,6 +199,10 @@ class SettingsDialog(QDialog):
 			"reviewer_hotkey_nadeshiko",
 			"reviewer_hotkey_genai",
 		]),
+		("Legacy Google", [
+			"google_api_key",
+			"google_cx",
+		]),
 	]
 	_LABELS = {
 		"default_replace": "Replace existing media by default",
@@ -202,7 +210,6 @@ class SettingsDialog(QDialog):
 		"query_suffix": "Search query suffix",
 		"append_photo_suffix": "Append photo suffix",
 		"provider_preference": "Image search provider order",
-		"ddg_locale": "DuckDuckGo region",
 		"google_api_key": "Google Custom Search API key",
 		"google_cx": "Google Programmable Search engine ID",
 		"reviewer_hotkey": "Review hotkey: image search",
@@ -224,15 +231,6 @@ class SettingsDialog(QDialog):
 		"google_genai_prompt_template": "Image prompt template",
 	}
 	_CHOICES = {
-		"ddg_locale": (
-			True,
-			[
-				("Japan", "ja-jp"),
-				("United States", "us-en"),
-				("United Kingdom", "uk-en"),
-				("No region", "wt-wt"),
-			],
-		),
 		"nadeshiko_sentence_lang": (
 			True,
 			[
@@ -278,6 +276,11 @@ class SettingsDialog(QDialog):
 		"nadeshiko_min_length": (0, 5000, ""),
 		"nadeshiko_max_length": (0, 5000, "No maximum"),
 	}
+	_HOTKEY_KEYS = {
+		"reviewer_hotkey",
+		"reviewer_hotkey_nadeshiko",
+		"reviewer_hotkey_genai",
+	}
 	_PLACEHOLDERS = {
 		"query_prefix": "Optional text before every image-search query",
 		"query_suffix": "Optional text after every image-search query",
@@ -293,6 +296,12 @@ class SettingsDialog(QDialog):
 		"reviewer_hotkey": "Ctrl+Shift+G",
 		"reviewer_hotkey_nadeshiko": "Ctrl+Shift+Y",
 		"reviewer_hotkey_genai": "Ctrl+Shift+U",
+	}
+	_HELP_LINKS = {
+		"nadeshiko_api_key": ("Get key", "https://nadeshiko.co/user/developer"),
+		"google_genai_api_key": ("Get key", "https://aistudio.google.com/apikey"),
+		"google_api_key": ("Get key", "https://developers.google.com/custom-search/v1/introduction"),
+		"google_cx": ("Create search engine", "https://programmablesearchengine.google.com/controlpanel/all"),
 	}
 
 	def __init__(self, parent=None) -> None:
@@ -361,7 +370,7 @@ class SettingsDialog(QDialog):
 		label = QLabel(self._label_for(key))
 		label.setToolTip(key)
 		widget.setToolTip(key)
-		form.addRow(label, widget)
+		form.addRow(label, self._wrap_widget_with_help(key, widget))
 
 	def _label_for(self, key: str) -> str:
 		if key in self._LABELS:
@@ -369,11 +378,14 @@ class SettingsDialog(QDialog):
 		return key.replace("_", " ").capitalize()
 
 	def _make_widget(self, key: str, default: Any, value: Any):
+		value = self._display_value(key, default, value)
 		if key == "provider_preference":
 			return ProviderOrderWidget(value, self)
 		if key in self._CHOICES:
 			editable, choices = self._CHOICES[key]
 			return self._make_choice_widget(value, choices, editable)
+		if key in self._HOTKEY_KEYS:
+			return self._make_hotkey_widget(value)
 		if isinstance(default, bool):
 			widget = QCheckBox(self)
 			widget.setChecked(bool(value))
@@ -402,6 +414,26 @@ class SettingsDialog(QDialog):
 		self._apply_placeholder(key, widget)
 		return widget
 
+	def _wrap_widget_with_help(self, key: str, widget):
+		link_info = self._HELP_LINKS.get(key)
+		if not link_info:
+			return widget
+		button_text, url = link_info
+		container = QWidget(self)
+		layout = QHBoxLayout(container)
+		layout.setContentsMargins(0, 0, 0, 0)
+		layout.addWidget(widget)
+		button = QPushButton(button_text, container)
+		button.setToolTip(url)
+		qconnect(button.clicked, lambda _checked=False, link=url: openLink(link))
+		layout.addWidget(button)
+		return container
+
+	def _display_value(self, key: str, default: Any, value: Any) -> Any:
+		if isinstance(default, str) and _is_placeholder_config_value(str(value)) and str(value).strip().upper().startswith("REPLACE_"):
+			return ""
+		return value
+
 	def _apply_placeholder(self, key: str, widget: QLineEdit) -> None:
 		placeholder = self._PLACEHOLDERS.get(key, "")
 		if placeholder:
@@ -415,11 +447,25 @@ class SettingsDialog(QDialog):
 		self._set_combo_value(widget, str(value or ""))
 		return widget
 
+	def _make_hotkey_widget(self, value: Any) -> QKeySequenceEdit:
+		widget = QKeySequenceEdit(self)
+		widget.setKeySequence(QKeySequence(str(value or "")))
+		try:
+			widget.setClearButtonEnabled(True)
+		except Exception:
+			pass
+		try:
+			widget.setMaximumSequenceLength(1)
+		except Exception:
+			pass
+		return widget
+
 	def _restore_defaults(self) -> None:
 		for key, default in self.defaults.items():
 			self._set_widget_value(self.widgets[key], default)
 
 	def _set_widget_value(self, widget, value: Any) -> None:
+		value = "" if isinstance(value, str) and value.strip().upper().startswith("REPLACE_") else value
 		if isinstance(widget, ProviderOrderWidget):
 			widget.set_value(value)
 		elif isinstance(widget, QCheckBox):
@@ -429,6 +475,8 @@ class SettingsDialog(QDialog):
 				widget.setValue(int(value))
 			except Exception:
 				widget.setValue(0)
+		elif isinstance(widget, QKeySequenceEdit):
+			widget.setKeySequence(QKeySequence("" if value is None else str(value)))
 		elif isinstance(widget, QLineEdit):
 			if isinstance(value, list):
 				widget.setText(", ".join(str(item) for item in value))
@@ -449,6 +497,8 @@ class SettingsDialog(QDialog):
 		widget = self.widgets[key]
 		if isinstance(widget, ProviderOrderWidget):
 			return widget.value()
+		if isinstance(widget, QKeySequenceEdit):
+			return str(widget.keySequence().toString()).strip()
 		if isinstance(widget, QComboBox):
 			idx = widget.currentIndex()
 			text = widget.currentText().strip()
@@ -456,7 +506,7 @@ class SettingsDialog(QDialog):
 				data = widget.itemData(idx)
 				if data is not None:
 					return data
-			return text
+			return "" if text.upper().startswith("REPLACE_") else text
 		if isinstance(default, bool):
 			return bool(widget.isChecked())
 		if isinstance(default, int) and not isinstance(default, bool):
@@ -465,13 +515,15 @@ class SettingsDialog(QDialog):
 			raw = widget.text().strip()
 			return [part.strip() for part in raw.split(",") if part.strip()]
 		raw = widget.text()
+		if raw.strip().upper().startswith("REPLACE_"):
+			return ""
 		if default is None:
 			raw = raw.strip()
 			return raw if raw else None
 		return raw
 
 	def _save(self) -> None:
-		data = dict(self.extra_config)
+		data = {k: v for k, v in self.extra_config.items() if k != "ddg_locale"}
 		for key, default in self.defaults.items():
 			data[key] = self._value_from_widget(key, default)
 		if _write_config(data):
@@ -584,8 +636,6 @@ class BackfillImagesDialog(QDialog):
 			"image": "Image Search",
 			"image search": "Image Search",
 			"images": "Image Search",
-			"ddg": "Image Search",
-			"duckduckgo": "Image Search",
 			"yahoo": "Image Search",
 			"gemini": "Gemini Image",
 			"gemini image": "Gemini Image",
@@ -760,11 +810,21 @@ def _strip_tags(text: str) -> str:
 
 def _provider_mode_name(value: str) -> str:
 	mode = (value or "google").strip().lower()
-	if mode in ("image", "images", "image search", "google search", "ddg", "duckduckgo", "yahoo"):
+	if mode in ("image", "images", "image search", "google search", "yahoo"):
 		return "google"
 	if mode in ("gemini", "gemini image", "genai", "google genai", "imagen"):
 		return "gemini"
 	return mode
+
+
+def _image_provider_order(cfg: Dict[str, Any]) -> List[str]:
+	raw = cfg.get("provider_preference", ["yahoo"])
+	raw_items = [str(p).strip().lower() for p in (raw or []) if str(p).strip()]
+	out: List[str] = []
+	for provider in raw_items:
+		if provider in ("yahoo", "google") and provider not in out:
+			out.append(provider)
+	return out
 
 
 def _is_placeholder_config_value(value: str) -> bool:
@@ -917,20 +977,19 @@ def _toggle_provider_fields(self) -> None:
 def _on_run(self) -> None:
 	# Selected mode from UI
 	provider_mode = _provider_mode_name(self.provider_combo.currentText() if hasattr(self, "provider_combo") else "google")
-	provider_order = [str(p).strip().lower() for p in (self.cfg.get("provider_preference", ["ddg"]) or ["ddg"]) if str(p).strip()]
-	ddg_client = DuckDuckGoClient(locale=self.cfg.get("ddg_locale", "ja-jp"))
+	provider_order = _image_provider_order(self.cfg)
 	yahoo_client = YahooImagesClient()
 	google_key = str(self.cfg.get("google_api_key", "")).strip()
 	google_cx = str(self.cfg.get("google_cx", "")).strip()
 	google_configured = not _is_placeholder_config_value(google_key) and not _is_placeholder_config_value(google_cx)
 	google_client = GoogleCSEClient(google_key, google_cx) if google_configured else None
 	if not provider_order:
-		showWarning("No image search providers available. Enable DuckDuckGo, Yahoo, or legacy Google.")
+		showWarning("No image search providers available. Enable Yahoo or legacy Google.")
 		return
 	if provider_mode == "google":
-		usable_providers = [p for p in provider_order if p in ("ddg", "yahoo") or (p == "google" and google_client is not None)]
+		usable_providers = [p for p in provider_order if p == "yahoo" or (p == "google" and google_client is not None)]
 		if not usable_providers:
-			showWarning("Image search has no usable provider. Choose DuckDuckGo/Yahoo, or configure google_api_key and google_cx for legacy Google.")
+			showWarning("Image search has no usable provider. Choose Yahoo, or configure google_api_key and google_cx for legacy Google.")
 			return
 
 	query_field = (self.query_field.currentText().strip() if hasattr(self.query_field, "currentText") else str(self.query_field.text()).strip())
@@ -1102,34 +1161,7 @@ def _on_run(self) -> None:
 				showWarning(f"Gemini Image error: {e}")
 		else:
 			for provider in provider_order:
-				if provider == "ddg":
-					try:
-						items = ddg_client.search_images(query_text, max_results=50)
-						if items:
-							candidates = [(it.get("image") or "").strip() for it in items]
-							candidates = [u for u in candidates if u]
-							if not candidates:
-								raise Exception("no image url")
-							start = nid % len(candidates)
-							pick = None
-							for off in range(len(candidates)):
-								cand = candidates[(start + off) % len(candidates)]
-								if cand not in used_urls:
-									pick = cand
-									break
-							if pick is None:
-								pick = candidates[start]
-							content = ddg_client.download_image(pick)
-							# Derive filename from URL tail
-							tail = pick.split("/")[-1].split("?")[0]
-							if not tail or "." not in tail:
-								tail = f"ddg_{nid}.jpg"
-							filename_hint = ensure_media_filename_safe(tail)
-							used_urls.add(pick)
-							break
-					except Exception as e:
-						last_error = f"DDG: {e}"
-				elif provider == "yahoo":
+				if provider == "yahoo":
 					try:
 						urls = []
 						if _HAS_PLAYWRIGHT and self.cfg.get("use_browser_provider", True):
@@ -1320,16 +1352,15 @@ def quick_add_image_for_current_card(mw) -> None:
 		if suffix_value and suffix_value not in query_text:
 			query_text = f"{query_text} {suffix_value}".strip()
 
-		provider_order = [str(p).strip().lower() for p in (cfg.get("provider_preference", ["ddg"]) or ["ddg"]) if str(p).strip()]
+		provider_order = _image_provider_order(cfg)
 		key = str(cfg.get("google_api_key", "")).strip()
 		cx = str(cfg.get("google_cx", "")).strip()
 		google_configured = not _is_placeholder_config_value(key) and not _is_placeholder_config_value(cx)
-		usable_providers = [p for p in provider_order if p in ("ddg", "yahoo") or (p == "google" and google_configured)]
+		usable_providers = [p for p in provider_order if p == "yahoo" or (p == "google" and google_configured)]
 		if not usable_providers:
-			showWarning("Image search has no usable provider. Choose DuckDuckGo/Yahoo, or configure google_api_key and google_cx for legacy Google.")
+			showWarning("Image search has no usable provider. Choose Yahoo, or configure google_api_key and google_cx for legacy Google.")
 			return
 
-		ddg_client = DuckDuckGoClient(locale=cfg.get("ddg_locale", "ja-jp"))
 		yahoo_client = YahooImagesClient()
 		google_client = GoogleCSEClient(key, cx) if google_configured else None
 		content: Optional[bytes] = None
@@ -1337,19 +1368,7 @@ def quick_add_image_for_current_card(mw) -> None:
 		last_error: Optional[str] = None
 		google_used = False
 		for provider in provider_order:
-			if provider == "ddg":
-				try:
-					items = ddg_client.search_images(query_text, max_results=10)
-					link = str((items[0].get("image") if items else "") or "").strip()
-					if not link:
-						raise Exception("no usable DuckDuckGo image result")
-					content = ddg_client.download_image(link)
-					tail = link.split("/")[-1].split("?")[0] or "ddg.jpg"
-					filename_hint = ensure_media_filename_safe(tail if "." in tail else "ddg.jpg")
-					break
-				except Exception as e:
-					last_error = f"DuckDuckGo: {e}"
-			elif provider == "yahoo":
+			if provider == "yahoo":
 				try:
 					urls = []
 					if _HAS_PLAYWRIGHT and cfg.get("use_browser_provider", True):
