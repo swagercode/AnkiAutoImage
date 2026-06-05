@@ -62,6 +62,46 @@ class SearchProviderTests(unittest.TestCase):
 			client = yahoo.YahooImagesClient()
 			self.assertEqual(client.download_image("https://img.example.com/dog.jpg"), b"image")
 
+	def test_yahoo_search_falls_back_when_browser_provider_fails(self) -> None:
+		tools = load_addon_module("tools")
+
+		class Client:
+			def search_image_urls(self, query, max_results=60):
+				self.query = query
+				self.max_results = max_results
+				return ["https://img.example.com/fallback.jpg"]
+
+		class Logger:
+			def __init__(self) -> None:
+				self.errors = []
+
+			def error(self, message: str) -> None:
+				self.errors.append(message)
+
+		client = Client()
+		logger = Logger()
+		with patch.object(tools, "_HAS_PLAYWRIGHT", True), patch.object(
+			tools, "yahoo_images_playwright", side_effect=RuntimeError("playwright missing")
+		):
+			urls = tools._search_yahoo_urls("dog", 5, client, use_browser_provider=True, logger=logger)
+
+		self.assertEqual(urls, ["https://img.example.com/fallback.jpg"])
+		self.assertEqual(client.query, "dog")
+		self.assertEqual(client.max_results, 5)
+		self.assertIn("falling back to HTTP scraper", logger.errors[0])
+
+	def test_yahoo_proxy_filename_gets_short_image_extension(self) -> None:
+		tools = load_addon_module("tools")
+
+		self.assertEqual(
+			tools._image_filename_from_url("https://msp.c.yimg.jp/images/v2/verylongproxyurl", "yahoo_123", b"\xff\xd8\xff\xe0data"),
+			"yahoo_123.jpg",
+		)
+		self.assertEqual(
+			tools._image_filename_from_url("https://img.example.com/dog.png?x=1", "yahoo_123", b"\x89PNG\r\n\x1a\ndata"),
+			"dog.png",
+		)
+
 	def test_google_error_format_uses_structured_error_message(self) -> None:
 		google = load_addon_module("google_cse")
 		resp = Response(status_code=400, data={"error": {"status": "INVALID_ARGUMENT", "message": "API key not valid"}})

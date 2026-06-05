@@ -827,6 +827,42 @@ def _image_provider_order(cfg: Dict[str, Any]) -> List[str]:
 	return out
 
 
+def _search_yahoo_urls(query: str, max_results: int, client: YahooImagesClient, use_browser_provider: bool, logger=None) -> List[str]:
+	if use_browser_provider and _HAS_PLAYWRIGHT:
+		try:
+			urls = yahoo_images_playwright(query, max_results=max_results)
+			if urls:
+				return urls
+		except Exception as e:
+			if logger is not None:
+				try:
+					logger.error(f"Yahoo browser search failed; falling back to HTTP scraper: {e}")
+				except Exception:
+					pass
+	return client.search_image_urls(query, max_results=max_results)
+
+
+def _image_extension_from_bytes(content: bytes) -> str:
+	if content.startswith(b"\xff\xd8\xff"):
+		return ".jpg"
+	if content.startswith(b"\x89PNG\r\n\x1a\n"):
+		return ".png"
+	if content.startswith(b"GIF87a") or content.startswith(b"GIF89a"):
+		return ".gif"
+	if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+		return ".webp"
+	return ".jpg"
+
+
+def _image_filename_from_url(url: str, fallback_stem: str, content: bytes) -> str:
+	tail = url.split("/")[-1].split("?")[0]
+	safe_tail = ensure_media_filename_safe(tail)
+	_, ext = os.path.splitext(safe_tail)
+	if ext.lower() in {".jpg", ".jpeg", ".png", ".gif", ".webp"} and len(safe_tail) <= 120:
+		return safe_tail
+	return ensure_media_filename_safe(f"{fallback_stem}{_image_extension_from_bytes(content)}")
+
+
 def _is_placeholder_config_value(value: str) -> bool:
 	text = str(value or "").strip()
 	return not text or text.upper().startswith("REPLACE_")
@@ -1041,6 +1077,11 @@ def _on_run(self) -> None:
 	used_urls: set[str] = set()
 	google_used_in_run = 0
 	google_error: Optional[str] = None
+	image_search_failures = 0
+	image_search_no_results = 0
+	image_search_skipped_existing = 0
+	image_search_missing_target = 0
+	image_search_last_error: Optional[str] = None
 	for i, nid in enumerate(nids):
 		note = col.get_note(nid)
 		q = get_field_value(note, query_field)
@@ -1163,27 +1204,28 @@ def _on_run(self) -> None:
 			for provider in provider_order:
 				if provider == "yahoo":
 					try:
-						urls = []
-						if _HAS_PLAYWRIGHT and self.cfg.get("use_browser_provider", True):
-							urls = yahoo_images_playwright(query_text, max_results=50)
+						urls = _search_yahoo_urls(
+							query_text,
+							max_results=50,
+							client=yahoo_client,
+							use_browser_provider=bool(self.cfg.get("use_browser_provider", True)),
+							logger=self.logger,
+						)
 						if not urls:
-							urls = yahoo_client.search_image_urls(query_text, max_results=50)
-						if urls:
-							start = nid % len(urls)
-							pick = None
-							for off in range(len(urls)):
-								cand = urls[(start + off) % len(urls)]
-								if cand not in used_urls:
-									pick = cand
-									break
-							if pick is None:
-								pick = urls[start]
-							content = yahoo_client.download_image(pick)
-							# Derive filename from URL tail
-							tail = pick.split("/")[-1].split("?")[0] or f"yahoo_{nid}.jpg"
-							filename_hint = ensure_media_filename_safe(tail)
-							used_urls.add(pick)
-							break
+							raise Exception("no usable Yahoo image result")
+						start = nid % len(urls)
+						pick = None
+						for off in range(len(urls)):
+							cand = urls[(start + off) % len(urls)]
+							if cand not in used_urls:
+								pick = cand
+								break
+						if pick is None:
+							pick = urls[start]
+						content = yahoo_client.download_image(pick)
+						filename_hint = _image_filename_from_url(pick, f"yahoo_{nid}", content)
+						used_urls.add(pick)
+						break
 					except Exception as e:
 						last_error = f"Yahoo: {e}"
 				elif provider == "google" and google_client is not None:
@@ -1216,6 +1258,11 @@ def _on_run(self) -> None:
 		if content is None or filename_hint is None:
 			if last_error:
 				self.logger.error(f"All providers failed for '{q}': {last_error}")
+				if provider_mode == "google":
+					image_search_failures += 1
+					image_search_last_error = last_error
+			elif provider_mode == "google":
+				image_search_no_results += 1
 			continue
 
 		media_name = media.write_data(filename_hint, content)
@@ -1224,6 +1271,11 @@ def _on_run(self) -> None:
 		if add_image_to_note(note, target_field, media_name, replace=replace_eff):
 			note.flush()
 			updated += 1
+		elif provider_mode == "google":
+			if target_field not in note:
+				image_search_missing_target += 1
+			else:
+				image_search_skipped_existing += 1
 
 	# Save last used UI settings for reviewer hotkey
 	try:
@@ -1267,8 +1319,23 @@ def _on_run(self) -> None:
 	if google_used_in_run:
 		self._increment_google_quota(google_used_in_run)
 		self.quota_label.setText(self._get_quota_display())
-	if provider_mode == "google" and updated == 0 and google_error:
-		showWarning(f"Updated 0 notes. Google Custom Search failed: {google_error}\n\nCheck google_api_key/google_cx, or remove google from provider_preference.")
+	if provider_mode == "google" and updated == 0:
+		msg = "Updated 0 notes."
+		if image_search_failures:
+			msg += f" Image search failed for {image_search_failures} note(s)."
+		if image_search_last_error:
+			msg += f" Last error: {image_search_last_error}."
+		elif google_error:
+			msg += f" Google Custom Search failed: {google_error}."
+		if image_search_no_results:
+			msg += f" No image results for {image_search_no_results} note(s)."
+		if image_search_skipped_existing:
+			msg += f" Target field already had media for {image_search_skipped_existing} note(s); enable Replace existing to overwrite it."
+		if image_search_missing_target:
+			msg += f" Target field was missing on {image_search_missing_target} note(s)."
+		if empty_queries:
+			msg += f" Empty query field on {empty_queries} note(s)."
+		showWarning(msg)
 	elif provider_mode == "nadeshiko" and nade_media_errors:
 		showWarning(f"Updated {updated} notes. Nadeshiko media failed for {nade_media_errors} download(s); see user_files/auto-image.log.")
 	elif provider_mode == "nadeshiko" and updated == 0:
@@ -1370,17 +1437,18 @@ def quick_add_image_for_current_card(mw) -> None:
 		for provider in provider_order:
 			if provider == "yahoo":
 				try:
-					urls = []
-					if _HAS_PLAYWRIGHT and cfg.get("use_browser_provider", True):
-						urls = yahoo_images_playwright(query_text, max_results=10)
-					if not urls:
-						urls = yahoo_client.search_image_urls(query_text, max_results=10)
+					urls = _search_yahoo_urls(
+						query_text,
+						max_results=10,
+						client=yahoo_client,
+						use_browser_provider=bool(cfg.get("use_browser_provider", True)),
+						logger=None,
+					)
 					link = str((urls[0] if urls else "") or "").strip()
 					if not link:
 						raise Exception("no usable Yahoo image result")
 					content = yahoo_client.download_image(link)
-					tail = link.split("/")[-1].split("?")[0] or "yahoo.jpg"
-					filename_hint = ensure_media_filename_safe(tail)
+					filename_hint = _image_filename_from_url(link, "yahoo", content)
 					break
 				except Exception as e:
 					last_error = f"Yahoo: {e}"
