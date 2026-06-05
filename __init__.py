@@ -151,7 +151,7 @@ def init_addon() -> None:
 		sc2 = QShortcut(QKeySequence(hotkey2), mw)
 		from .tools import quick_add_nadeshiko_for_current_card
 		qconnect(sc2.activated, lambda: quick_add_nadeshiko_for_current_card(mw))
-		# Third hotkey for Google GenAI image generation
+		# Third hotkey for Gemini Image generation
 		sc3 = QShortcut(QKeySequence(hotkey3), mw)
 		from .tools import quick_add_google_genai_image_for_current_card
 		qconnect(sc3.activated, lambda: quick_add_google_genai_image_for_current_card(mw))

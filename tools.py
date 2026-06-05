@@ -13,6 +13,7 @@ except Exception:
 
 from aqt.qt import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QCheckBox, QSpinBox
 from aqt.qt import QDialogButtonBox, QFormLayout, QScrollArea, QWidget
+from aqt.qt import QTabWidget
 from aqt.qt import qconnect
 from aqt import mw
 from aqt.utils import showInfo, showWarning
@@ -118,7 +119,182 @@ def _write_last_settings(data: Dict[str, Any]) -> None:
 		pass
 
 
+class ProviderOrderWidget(QWidget):
+	def __init__(self, value: Any, parent=None) -> None:
+		super().__init__(parent)
+		layout = QHBoxLayout(self)
+		layout.setContentsMargins(0, 0, 0, 0)
+		providers = [str(p).strip().lower() for p in (value or []) if str(p).strip()]
+		self.combos: List[QComboBox] = []
+		for idx in range(3):
+			combo = QComboBox(self)
+			combo.addItem("None", "")
+			combo.addItem("DuckDuckGo", "ddg")
+			combo.addItem("Yahoo", "yahoo")
+			combo.addItem("Google", "google")
+			if idx < len(providers):
+				self._set_combo_data(combo, providers[idx])
+			self.combos.append(combo)
+			layout.addWidget(combo)
+
+	def value(self) -> List[str]:
+		out: List[str] = []
+		for combo in self.combos:
+			val = str(combo.currentData() or "").strip()
+			if val and val not in out:
+				out.append(val)
+		return out
+
+	def set_value(self, value: Any) -> None:
+		providers = [str(p).strip().lower() for p in (value or []) if str(p).strip()]
+		for idx, combo in enumerate(self.combos):
+			self._set_combo_data(combo, providers[idx] if idx < len(providers) else "")
+
+	def _set_combo_data(self, combo: QComboBox, data: str) -> None:
+		for idx in range(combo.count()):
+			if str(combo.itemData(idx) or "") == data:
+				combo.setCurrentIndex(idx)
+				return
+		combo.setCurrentIndex(0)
+
+
 class SettingsDialog(QDialog):
+	_TAB_ORDER = [
+		("General", [
+			"default_replace",
+			"provider_preference",
+			"ddg_locale",
+			"query_prefix",
+			"query_suffix",
+			"append_photo_suffix",
+		]),
+		("Legacy Google", [
+			"google_api_key",
+			"google_cx",
+		]),
+		("Nadeshiko", [
+			"nadeshiko_api_key",
+			"nadeshiko_min_length",
+			"nadeshiko_max_length",
+			"nadeshiko_image_field",
+			"nadeshiko_audio_field",
+			"nadeshiko_sentence_lang",
+			"nadeshiko_sentence_en_lang",
+			"nadeshiko_sentence_en_field",
+			"nadeshiko_query_suffix",
+		]),
+		("Gemini Image", [
+			"google_genai_api_key",
+			"google_genai_model",
+			"google_genai_aspect_ratio",
+			"google_genai_person_generation",
+			"google_genai_prompt_template",
+		]),
+		("Hotkeys", [
+			"reviewer_hotkey",
+			"reviewer_hotkey_nadeshiko",
+			"reviewer_hotkey_genai",
+		]),
+	]
+	_LABELS = {
+		"default_replace": "Replace existing media by default",
+		"query_prefix": "Search query prefix",
+		"query_suffix": "Search query suffix",
+		"append_photo_suffix": "Append photo suffix",
+		"provider_preference": "Image search provider order",
+		"ddg_locale": "DuckDuckGo region",
+		"google_api_key": "Google Custom Search API key",
+		"google_cx": "Google Programmable Search engine ID",
+		"reviewer_hotkey": "Review hotkey: image search",
+		"reviewer_hotkey_nadeshiko": "Review hotkey: Nadeshiko",
+		"reviewer_hotkey_genai": "Review hotkey: Gemini Image",
+		"nadeshiko_api_key": "Nadeshiko API key",
+		"nadeshiko_min_length": "Minimum sentence length",
+		"nadeshiko_max_length": "Maximum sentence length",
+		"nadeshiko_image_field": "Default image field",
+		"nadeshiko_audio_field": "Default sentence audio field",
+		"nadeshiko_sentence_lang": "Sentence language",
+		"nadeshiko_sentence_en_lang": "Second sentence language",
+		"nadeshiko_sentence_en_field": "Default second sentence field",
+		"nadeshiko_query_suffix": "Nadeshiko query suffix",
+		"google_genai_api_key": "Gemini API key",
+		"google_genai_model": "Image generation model",
+		"google_genai_aspect_ratio": "Generated image aspect ratio",
+		"google_genai_person_generation": "Person generation policy",
+		"google_genai_prompt_template": "Image prompt template",
+	}
+	_CHOICES = {
+		"ddg_locale": (
+			True,
+			[
+				("Japan", "ja-jp"),
+				("United States", "us-en"),
+				("United Kingdom", "uk-en"),
+				("No region", "wt-wt"),
+			],
+		),
+		"nadeshiko_sentence_lang": (
+			True,
+			[
+				("Japanese", "jp"),
+				("English", "en"),
+			],
+		),
+		"nadeshiko_sentence_en_lang": (
+			True,
+			[
+				("English", "en"),
+				("Japanese", "jp"),
+			],
+		),
+		"google_genai_model": (
+			True,
+			[
+				("Gemini Image", "gemini-3.1-flash-image"),
+				("Imagen 4", "imagen-4.0-generate-001"),
+				("Imagen 4 Fast", "imagen-4.0-fast-generate-001"),
+			],
+		),
+		"google_genai_aspect_ratio": (
+			False,
+			[
+				("Square", "1:1"),
+				("Portrait", "3:4"),
+				("Landscape", "4:3"),
+				("Tall", "9:16"),
+				("Wide", "16:9"),
+			],
+		),
+		"google_genai_person_generation": (
+			False,
+			[
+				("Allow all", "ALLOW_ALL"),
+				("Allow adults only", "ALLOW_ADULT"),
+				("Do not allow people", "DONT_ALLOW"),
+			],
+		),
+	}
+	_SPIN_RANGES = {
+		"nadeshiko_min_length": (0, 5000, ""),
+		"nadeshiko_max_length": (0, 5000, "No maximum"),
+	}
+	_PLACEHOLDERS = {
+		"query_prefix": "Optional text before every image-search query",
+		"query_suffix": "Optional text after every image-search query",
+		"google_api_key": "Paste Google Custom Search API key",
+		"google_cx": "Paste Programmable Search engine ID",
+		"nadeshiko_api_key": "Paste Nadeshiko API key",
+		"nadeshiko_image_field": "Blank = choose in Run dialog",
+		"nadeshiko_audio_field": "Blank = choose in Run dialog",
+		"nadeshiko_sentence_en_field": "Blank = auto-detect",
+		"nadeshiko_query_suffix": "Optional text after every Nadeshiko query",
+		"google_genai_api_key": "Paste Gemini API key",
+		"google_genai_prompt_template": "Use {term} for the note text",
+		"reviewer_hotkey": "Ctrl+Shift+G",
+		"reviewer_hotkey_nadeshiko": "Ctrl+Shift+Y",
+		"reviewer_hotkey_genai": "Ctrl+Shift+U",
+	}
+
 	def __init__(self, parent=None) -> None:
 		super().__init__(parent or mw)
 		self.setWindowTitle("AutoImage Settings")
@@ -131,21 +307,26 @@ class SettingsDialog(QDialog):
 		self._build_ui()
 
 	def _build_ui(self) -> None:
-		self.setMinimumWidth(620)
+		self.setMinimumWidth(720)
 		self.setMinimumHeight(520)
 		layout = QVBoxLayout(self)
 
-		scroll = QScrollArea(self)
-		scroll.setWidgetResizable(True)
-		body = QWidget(scroll)
-		form = QFormLayout(body)
-		for key, default in self.defaults.items():
-			value = self.values.get(key, default)
-			widget = self._make_widget(default, value)
-			self.widgets[key] = widget
-			form.addRow(QLabel(key), widget)
-		scroll.setWidget(body)
-		layout.addWidget(scroll)
+		tabs = QTabWidget(self)
+		added: set[str] = set()
+		for title, keys in self._TAB_ORDER:
+			tab, form = self._make_tab()
+			for key in keys:
+				if key in self.defaults:
+					self._add_setting_row(form, key)
+					added.add(key)
+			tabs.addTab(tab, title)
+		advanced_keys = [key for key in self.defaults if key not in added]
+		if advanced_keys:
+			tab, form = self._make_tab()
+			for key in advanced_keys:
+				self._add_setting_row(form, key)
+			tabs.addTab(tab, "Advanced")
+		layout.addWidget(tabs)
 
 		buttons = QDialogButtonBox(
 			QDialogButtonBox.StandardButton.Save
@@ -160,14 +341,49 @@ class SettingsDialog(QDialog):
 			qconnect(restore.clicked, self._restore_defaults)
 		layout.addWidget(buttons)
 
-	def _make_widget(self, default: Any, value: Any):
+	def _make_tab(self):
+		tab = QWidget(self)
+		layout = QVBoxLayout(tab)
+		scroll = QScrollArea(tab)
+		scroll.setWidgetResizable(True)
+		body = QWidget(scroll)
+		form = QFormLayout(body)
+		form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+		scroll.setWidget(body)
+		layout.addWidget(scroll)
+		return tab, form
+
+	def _add_setting_row(self, form: QFormLayout, key: str) -> None:
+		default = self.defaults[key]
+		value = self.values.get(key, default)
+		widget = self._make_widget(key, default, value)
+		self.widgets[key] = widget
+		label = QLabel(self._label_for(key))
+		label.setToolTip(key)
+		widget.setToolTip(key)
+		form.addRow(label, widget)
+
+	def _label_for(self, key: str) -> str:
+		if key in self._LABELS:
+			return self._LABELS[key]
+		return key.replace("_", " ").capitalize()
+
+	def _make_widget(self, key: str, default: Any, value: Any):
+		if key == "provider_preference":
+			return ProviderOrderWidget(value, self)
+		if key in self._CHOICES:
+			editable, choices = self._CHOICES[key]
+			return self._make_choice_widget(value, choices, editable)
 		if isinstance(default, bool):
 			widget = QCheckBox(self)
 			widget.setChecked(bool(value))
 			return widget
 		if isinstance(default, int) and not isinstance(default, bool):
 			widget = QSpinBox(self)
-			widget.setRange(-1000000, 1000000)
+			min_val, max_val, special_text = self._SPIN_RANGES.get(key, (-1000000, 1000000, ""))
+			widget.setRange(min_val, max_val)
+			if special_text:
+				widget.setSpecialValueText(special_text)
 			try:
 				widget.setValue(int(value))
 			except Exception:
@@ -179,9 +395,24 @@ class SettingsDialog(QDialog):
 				widget.setText(", ".join(str(item) for item in value))
 			else:
 				widget.setText(str(value or ""))
+			self._apply_placeholder(key, widget)
 			return widget
 		widget = QLineEdit(self)
 		widget.setText("" if value is None else str(value))
+		self._apply_placeholder(key, widget)
+		return widget
+
+	def _apply_placeholder(self, key: str, widget: QLineEdit) -> None:
+		placeholder = self._PLACEHOLDERS.get(key, "")
+		if placeholder:
+			widget.setPlaceholderText(placeholder)
+
+	def _make_choice_widget(self, value: Any, choices: List[tuple[str, str]], editable: bool) -> QComboBox:
+		widget = QComboBox(self)
+		widget.setEditable(editable)
+		for label, data in choices:
+			widget.addItem(f"{label} ({data})", data)
+		self._set_combo_value(widget, str(value or ""))
 		return widget
 
 	def _restore_defaults(self) -> None:
@@ -189,7 +420,9 @@ class SettingsDialog(QDialog):
 			self._set_widget_value(self.widgets[key], default)
 
 	def _set_widget_value(self, widget, value: Any) -> None:
-		if isinstance(widget, QCheckBox):
+		if isinstance(widget, ProviderOrderWidget):
+			widget.set_value(value)
+		elif isinstance(widget, QCheckBox):
 			widget.setChecked(bool(value))
 		elif isinstance(widget, QSpinBox):
 			try:
@@ -201,9 +434,29 @@ class SettingsDialog(QDialog):
 				widget.setText(", ".join(str(item) for item in value))
 			else:
 				widget.setText("" if value is None else str(value))
+		elif isinstance(widget, QComboBox):
+			self._set_combo_value(widget, str(value or ""))
+
+	def _set_combo_value(self, widget: QComboBox, value: str) -> None:
+		for idx in range(widget.count()):
+			if str(widget.itemData(idx) or "") == value:
+				widget.setCurrentIndex(idx)
+				return
+		if widget.isEditable():
+			widget.setEditText(value)
 
 	def _value_from_widget(self, key: str, default: Any) -> Any:
 		widget = self.widgets[key]
+		if isinstance(widget, ProviderOrderWidget):
+			return widget.value()
+		if isinstance(widget, QComboBox):
+			idx = widget.currentIndex()
+			text = widget.currentText().strip()
+			if idx >= 0 and text == widget.itemText(idx):
+				data = widget.itemData(idx)
+				if data is not None:
+					return data
+			return text
 		if isinstance(default, bool):
 			return bool(widget.isChecked())
 		if isinstance(default, int) and not isinstance(default, bool):
@@ -278,7 +531,7 @@ class BackfillImagesDialog(QDialog):
 		eta = midnight - now
 		hrs = eta.seconds // 3600
 		mins = (eta.seconds % 3600) // 60
-		return f"Google quota: {used}/100, resets in {hrs:02d}:{mins:02d} (PT)"
+		return f"Legacy Google quota: {used}/100, resets in {hrs:02d}:{mins:02d} (PT)"
 
 	def _increment_google_quota(self, inc: int) -> None:
 		if inc <= 0:
@@ -323,22 +576,29 @@ class BackfillImagesDialog(QDialog):
 		row_p = QHBoxLayout()
 		row_p.addWidget(QLabel("Provider"))
 		self.provider_combo = QComboBox(self)
-		self.provider_combo.addItems(["Google", "Gemini Image", "Nadeshiko"])
-		default_provider_raw = str(self.cfg.get("ui_default_provider", "Google")).strip().lower()
+		self.provider_combo.addItems(["Image Search", "Gemini Image", "Nadeshiko"])
+		default_provider_raw = str(self.cfg.get("ui_default_provider", "Image Search")).strip().lower()
 		default_provider = {
-			"google": "Google",
+			"google": "Image Search",
+			"google search": "Image Search",
+			"image": "Image Search",
+			"image search": "Image Search",
+			"images": "Image Search",
+			"ddg": "Image Search",
+			"duckduckgo": "Image Search",
+			"yahoo": "Image Search",
 			"gemini": "Gemini Image",
 			"gemini image": "Gemini Image",
 			"genai": "Gemini Image",
 			"google genai": "Gemini Image",
 			"imagen": "Gemini Image",
 			"nadeshiko": "Nadeshiko",
-		}.get(default_provider_raw, "Google")
+		}.get(default_provider_raw, "Image Search")
 		self.provider_combo.setCurrentText(default_provider)
 		row_p.addWidget(self.provider_combo)
 		layout.addLayout(row_p)
 
-		# Target (Google/Gemini Image)
+		# Target (Image Search/Gemini Image)
 		row_t = QHBoxLayout()
 		self.lbl_target = QLabel("Target Field")
 		row_t.addWidget(self.lbl_target)
@@ -500,6 +760,8 @@ def _strip_tags(text: str) -> str:
 
 def _provider_mode_name(value: str) -> str:
 	mode = (value or "google").strip().lower()
+	if mode in ("image", "images", "image search", "google search", "ddg", "duckduckgo", "yahoo"):
+		return "google"
 	if mode in ("gemini", "gemini image", "genai", "google genai", "imagen"):
 		return "gemini"
 	return mode
@@ -636,7 +898,7 @@ def _toggle_provider_fields(self) -> None:
 	# Toggle visibility
 	self.target_field.setVisible(not nade)
 	self.lbl_target.setVisible(not nade)
-	# Suffix only for Google
+	# Suffix only for generic image search
 	show_suffix = (mode == "google")
 	self.suffix_field.setVisible(show_suffix)
 	self.lbl_suffix.setVisible(show_suffix)
@@ -663,12 +925,12 @@ def _on_run(self) -> None:
 	google_configured = not _is_placeholder_config_value(google_key) and not _is_placeholder_config_value(google_cx)
 	google_client = GoogleCSEClient(google_key, google_cx) if google_configured else None
 	if not provider_order:
-		showWarning("No providers available. Enable DDG or Google.")
+		showWarning("No image search providers available. Enable DuckDuckGo, Yahoo, or legacy Google.")
 		return
 	if provider_mode == "google":
 		usable_providers = [p for p in provider_order if p in ("ddg", "yahoo") or (p == "google" and google_client is not None)]
 		if not usable_providers:
-			showWarning("Google image backfill has no usable provider. Configure google_api_key and google_cx, or set provider_preference to ddg/yahoo.")
+			showWarning("Image search has no usable provider. Choose DuckDuckGo/Yahoo, or configure google_api_key and google_cx for legacy Google.")
 			return
 
 	query_field = (self.query_field.currentText().strip() if hasattr(self.query_field, "currentText") else str(self.query_field.text()).strip())
@@ -732,7 +994,7 @@ def _on_run(self) -> None:
 		prefix = self.cfg.get("query_prefix", "")
 		suffix = self.cfg.get("query_suffix", "")
 		query_text = f"{prefix}{q}{suffix}".strip()
-		# Suffix from UI (apply only to Google image search)
+		# Suffix from UI (apply only to generic image search)
 		ui_suffix = (self.suffix_field.text().strip() if hasattr(self, "suffix_field") else "") or "イラスト"
 		if provider_mode == "google" and ui_suffix and ui_suffix not in query_text:
 			query_text = f"{query_text} {ui_suffix}".strip()
@@ -1017,7 +1279,7 @@ def _increment_google_quota_global(inc: int) -> None:
 
 
 def quick_add_image_for_current_card(mw) -> None:
-	"""Add a Google image to the current reviewer card using last-used/default settings.
+	"""Add an image-search result to the current reviewer card using last-used/default settings.
 
 	Always overwrites the target field. Uses saved query/target/suffix if available.
 	"""
@@ -1058,29 +1320,74 @@ def quick_add_image_for_current_card(mw) -> None:
 		if suffix_value and suffix_value not in query_text:
 			query_text = f"{query_text} {suffix_value}".strip()
 
+		provider_order = [str(p).strip().lower() for p in (cfg.get("provider_preference", ["ddg"]) or ["ddg"]) if str(p).strip()]
 		key = str(cfg.get("google_api_key", "")).strip()
 		cx = str(cfg.get("google_cx", "")).strip()
-		if _is_placeholder_config_value(key) or _is_placeholder_config_value(cx):
-			showWarning("Google API key or CX is missing or still set to a placeholder in config.json")
+		google_configured = not _is_placeholder_config_value(key) and not _is_placeholder_config_value(cx)
+		usable_providers = [p for p in provider_order if p in ("ddg", "yahoo") or (p == "google" and google_configured)]
+		if not usable_providers:
+			showWarning("Image search has no usable provider. Choose DuckDuckGo/Yahoo, or configure google_api_key and google_cx for legacy Google.")
 			return
 
-		client = GoogleCSEClient(key, cx)
-		items = client.search_images(query_text, num=10, lr="lang_ja")
-		if not items:
-			showInfo("No images found.")
+		ddg_client = DuckDuckGoClient(locale=cfg.get("ddg_locale", "ja-jp"))
+		yahoo_client = YahooImagesClient()
+		google_client = GoogleCSEClient(key, cx) if google_configured else None
+		content: Optional[bytes] = None
+		filename_hint: Optional[str] = None
+		last_error: Optional[str] = None
+		google_used = False
+		for provider in provider_order:
+			if provider == "ddg":
+				try:
+					items = ddg_client.search_images(query_text, max_results=10)
+					link = str((items[0].get("image") if items else "") or "").strip()
+					if not link:
+						raise Exception("no usable DuckDuckGo image result")
+					content = ddg_client.download_image(link)
+					tail = link.split("/")[-1].split("?")[0] or "ddg.jpg"
+					filename_hint = ensure_media_filename_safe(tail if "." in tail else "ddg.jpg")
+					break
+				except Exception as e:
+					last_error = f"DuckDuckGo: {e}"
+			elif provider == "yahoo":
+				try:
+					urls = []
+					if _HAS_PLAYWRIGHT and cfg.get("use_browser_provider", True):
+						urls = yahoo_images_playwright(query_text, max_results=10)
+					if not urls:
+						urls = yahoo_client.search_image_urls(query_text, max_results=10)
+					link = str((urls[0] if urls else "") or "").strip()
+					if not link:
+						raise Exception("no usable Yahoo image result")
+					content = yahoo_client.download_image(link)
+					tail = link.split("/")[-1].split("?")[0] or "yahoo.jpg"
+					filename_hint = ensure_media_filename_safe(tail)
+					break
+				except Exception as e:
+					last_error = f"Yahoo: {e}"
+			elif provider == "google" and google_client is not None:
+				try:
+					items = google_client.search_images(query_text, num=10, lr="lang_ja")
+					link = str((items[0].get("link") if items else "") or "").strip()
+					if not link:
+						raise Exception("no usable Google image result")
+					referer = items[0].get("image", {}).get("contextLink") or items[0].get("displayLink") or "https://www.google.com/"
+					content = google_client.download_image(link, referer=referer)
+					tail = link.split("/")[-1].split("?")[0] or "google.jpg"
+					filename_hint = ensure_media_filename_safe(tail)
+					google_used = True
+					break
+				except Exception as e:
+					last_error = f"Google: {e}"
+
+		if content is None or filename_hint is None:
+			showWarning(f"Image search failed: {last_error or 'No images found.'}")
 			return
-		link = str(items[0].get("link") or "").strip()
-		if not link:
-			showInfo("No usable image link found.")
-			return
-		referer = items[0].get("image", {}).get("contextLink") or items[0].get("displayLink") or "https://www.google.com/"
-		content = client.download_image(link, referer=referer)
-		tail = link.split("/")[-1].split("?")[0] or "google.jpg"
-		filename_hint = ensure_media_filename_safe(tail)
 		media_name = col.media.write_data(filename_hint, content)
 		if add_image_to_note(note, target_field, media_name, replace=True):
 			note.flush()
-			_increment_google_quota_global(1)
+			if google_used:
+				_increment_google_quota_global(1)
 			col.reset()
 			mw.reset()
 			showInfo("Image added to current card.")

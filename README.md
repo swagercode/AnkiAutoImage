@@ -3,7 +3,7 @@
 # Auto Images - Anki Add-on
 
 Adds media to Anki notes from:
-- DDG/Yahoo image backfill, with legacy Google Custom Search support for existing Google setups
+- DuckDuckGo/Yahoo image backfill, with legacy Google Custom Search support for existing Google setups
 - Nadeshiko sentence image/audio/text
 - Gemini Image generation through Google GenAI
 
@@ -17,34 +17,33 @@ Adds media to Anki notes from:
 - Gemini API: https://aistudio.google.com/apikey
 - Legacy Google image search: https://developers.google.com/custom-search/v1/overview and `cx` from https://programmablesearchengine.google.com/controlpanel/create
 
-## Config
-See [config.json](config.json) for the full default config.
+## Settings
+Open `Tools -> AutoImage -> Settings`. The settings UI is also used by Anki's add-on `Config` button.
 
-- `provider_preference`: image backfill order. Use any of `ddg`, `yahoo`, `google`.
-- `google_api_key` / `google_cx`: only needed for legacy Google Custom Search image results.
-- `google_genai_api_key`: required for Gemini Image generation. `GEMINI_API_KEY` also works.
-- `google_genai_model`: defaults to `gemini-3.1-flash-image`. Imagen model IDs are still supported if configured explicitly.
-- `google_genai_prompt_template`: prompt template for generated images. Use `{term}` for the source field value.
-- `nadeshiko_api_key`: required for Nadeshiko.
-- `nadeshiko_min_length` / `nadeshiko_max_length`: optional sentence length bounds. `0` disables the max bound.
-- `nadeshiko_sentence_lang` / `nadeshiko_sentence_en_lang`: defaults to Japanese in the main sentence field and English in the optional EN field.
-- `reviewer_hotkey`, `reviewer_hotkey_nadeshiko`, `reviewer_hotkey_genai`: review-mode shortcuts.
+Tabs:
+- `General`: replace behavior, image-search provider order, DuckDuckGo region, and shared query prefix/suffix settings.
+- `Legacy Google`: Google Custom Search API key and Programmable Search engine ID for existing Google setups.
+- `Nadeshiko`: API key, sentence length bounds, default media/sentence fields, sentence languages, and query suffix.
+- `Gemini Image`: Gemini API key, image model, aspect ratio, person-generation policy, and prompt template.
+- `Hotkeys`: review-mode shortcuts for image search, Nadeshiko, and Gemini Image.
+
+See [config.json](config.json) for the shipped defaults. Advanced users can still edit the raw JSON through Anki's add-on config storage, but normal setup should use the Settings UI.
 
 ## Usage
 - Open `Tools -> AutoImage -> Run` for a deck, or `Browser -> Edit -> Auto Images` for selected notes.
 - Choose a `Query Field`.
 - Choose a provider:
-  - `Google`: image-search backfill using `provider_preference`.
+  - `Image Search`: image-search backfill using the provider order from Settings.
   - `Nadeshiko`: image/audio/sentence fields, with optional `Sentence EN Field`.
   - `Gemini Image`: generated image written to the target field.
 - Click `Run`.
 
 Review hotkeys:
-- Google/image backfill: `Ctrl+Shift+G`
+- Image search backfill: `Ctrl+Shift+G`
 - Nadeshiko image/audio/sentence: `Ctrl+Shift+Y`
 - Gemini Image: `Ctrl+Shift+U`
 
-Hotkeys use the last saved fields for that provider. Google and Gemini Image hotkeys overwrite the target image field. The Nadeshiko hotkey overwrites image/audio fields and writes sentence text when matching fields are available.
+Hotkeys use the last saved fields for that provider. Image Search and Gemini Image hotkeys overwrite the target image field. The Nadeshiko hotkey overwrites image/audio fields and writes sentence text when matching fields are available.
 
 ## Logs
 - Logs: `user_files/auto-image.log`
