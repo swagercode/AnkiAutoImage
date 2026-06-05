@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 """
-Anki add-on: Auto Images (Google)
+Anki add-on: Auto Images
 
 Adds two entry points:
-- Tools -> Auto Images (Google) (run over a deck)
-- Browser -> Edit -> Auto Images (Google) (run over selected notes)
+- Tools -> Auto Images (run over a deck)
+- Browser -> Edit -> Auto Images (run over selected notes)
 
 Configuration is read from config.json next to this file.
 """
@@ -37,7 +37,7 @@ def _open_browser_dialog(browser) -> None:
 
 
 def _setup_tools_menu() -> None:
-	action = QAction("Auto Images (Google)", mw)
+	action = QAction("Auto Images", mw)
 	qconnect(action.triggered, _open_tools_dialog)
 	mw.form.menuTools.addAction(action)
 
@@ -47,12 +47,12 @@ def _setup_browser_menu_with_gui_hooks() -> bool:
 		from aqt import gui_hooks
 
 		def on_browser_menus_init(browser):
-			action = QAction("Auto Images (Google)", browser)
+			action = QAction("Auto Images", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			browser.form.menuEdit.addAction(action)
 
 		def on_browser_context_menu(browser, menu):
-			action = QAction("Auto Images (Google)", browser)
+			action = QAction("Auto Images", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			menu.addSeparator()
 			menu.addAction(action)
@@ -73,7 +73,7 @@ def _setup_browser_menu_with_legacy_hook() -> None:
 		from anki.hooks import addHook
 
 		def on_browser_setup_menus(browser):
-			action = QAction("Auto Images (Google)", browser)
+			action = QAction("Auto Images", browser)
 			qconnect(action.triggered, lambda: _open_browser_dialog(browser))
 			browser.form.menuEdit.addAction(action)
 			# Context menu on older Anki (fallback)

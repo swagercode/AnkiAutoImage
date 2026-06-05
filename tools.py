@@ -182,14 +182,22 @@ class BackfillImagesDialog(QDialog):
 		row_p = QHBoxLayout()
 		row_p.addWidget(QLabel("Provider"))
 		self.provider_combo = QComboBox(self)
-		self.provider_combo.addItems(["Google", "Gemini", "Nadeshiko"])
-		default_provider = str(self.cfg.get("ui_default_provider", "Google")).strip().title()
-		if default_provider in ("Google", "Gemini", "Nadeshiko"):
-			self.provider_combo.setCurrentText(default_provider)
+		self.provider_combo.addItems(["Google", "Gemini Image", "Nadeshiko"])
+		default_provider_raw = str(self.cfg.get("ui_default_provider", "Google")).strip().lower()
+		default_provider = {
+			"google": "Google",
+			"gemini": "Gemini Image",
+			"gemini image": "Gemini Image",
+			"genai": "Gemini Image",
+			"google genai": "Gemini Image",
+			"imagen": "Gemini Image",
+			"nadeshiko": "Nadeshiko",
+		}.get(default_provider_raw, "Google")
+		self.provider_combo.setCurrentText(default_provider)
 		row_p.addWidget(self.provider_combo)
 		layout.addLayout(row_p)
 
-		# Target (Google/Gemini)
+		# Target (Google/Gemini Image)
 		row_t = QHBoxLayout()
 		self.lbl_target = QLabel("Target Field")
 		row_t.addWidget(self.lbl_target)
@@ -218,6 +226,13 @@ class BackfillImagesDialog(QDialog):
 		self.nade_sentence_field = QComboBox(self)
 		self._row_nade_sentence.addWidget(self.nade_sentence_field)
 		layout.addLayout(self._row_nade_sentence)
+
+		self._row_nade_sentence_en = QHBoxLayout()
+		self.lbl_nade_sentence_en = QLabel("Sentence EN Field")
+		self._row_nade_sentence_en.addWidget(self.lbl_nade_sentence_en)
+		self.nade_sentence_en_field = QComboBox(self)
+		self._row_nade_sentence_en.addWidget(self.nade_sentence_en_field)
+		layout.addLayout(self._row_nade_sentence_en)
 
 		# Suffix control
 		row_suf = QHBoxLayout()
@@ -278,7 +293,7 @@ class BackfillImagesDialog(QDialog):
 	def _apply_last_settings_for_provider(self) -> None:
 		"""Restore last-used fields per provider when switching providers/opening UI."""
 		try:
-			mode = (self.provider_combo.currentText() or "").strip().lower() if hasattr(self, "provider_combo") else "google"
+			mode = _provider_mode_name(self.provider_combo.currentText() if hasattr(self, "provider_combo") else "google")
 			last = _read_last_settings() or {}
 			fields: List[str] = []
 			# collect current dropdown items
@@ -291,6 +306,11 @@ class BackfillImagesDialog(QDialog):
 					return fields.index(name)
 				except Exception:
 					return default_idx
+			def _set_combo_text(combo: QComboBox, name: str) -> None:
+				for idx in range(combo.count()):
+					if combo.itemText(idx) == name:
+						combo.setCurrentIndex(idx)
+						return
 			if mode == "google":
 				lg = last.get("google", {}) if isinstance(last.get("google"), dict) else {}
 				qf = str(lg.get("query_field", ""))
@@ -308,6 +328,7 @@ class BackfillImagesDialog(QDialog):
 				imgf = str(ln.get("image_field", ""))
 				audf = str(ln.get("audio_field", ""))
 				sentf = str(ln.get("sentence_field", ""))
+				sent_enf = str(ln.get("sentence_en_field", ""))
 				if qf:
 					self.query_field.setCurrentIndex(_index_of(qf, self.query_field.currentIndex()))
 				if imgf:
@@ -316,6 +337,8 @@ class BackfillImagesDialog(QDialog):
 					self.nade_audio_field.setCurrentIndex(_index_of(audf, self.nade_audio_field.currentIndex()))
 				if sentf:
 					self.nade_sentence_field.setCurrentIndex(_index_of(sentf, self.nade_sentence_field.currentIndex()))
+				if sent_enf and hasattr(self, "nade_sentence_en_field"):
+					_set_combo_text(self.nade_sentence_en_field, sent_enf)
 			elif mode == "gemini":
 				lgm = last.get("gemini", {}) if isinstance(last.get("gemini"), dict) else {}
 				qf = str(lgm.get("query_field", ""))
@@ -332,6 +355,18 @@ def _strip_tags(text: str) -> str:
 		return re.sub(r"<[^>]+>", "", text or "")
 	except Exception:
 		return text or ""
+
+
+def _provider_mode_name(value: str) -> str:
+	mode = (value or "google").strip().lower()
+	if mode in ("gemini", "gemini image", "genai", "google genai", "imagen"):
+		return "gemini"
+	return mode
+
+
+def _is_placeholder_config_value(value: str) -> bool:
+	text = str(value or "").strip()
+	return not text or text.upper().startswith("REPLACE_")
 
 
 def _nade_format_sentence(segment: Dict[str, Any], lang_code: str) -> str:
@@ -422,29 +457,40 @@ def _refresh_field_dropdowns(self) -> None:
 	self.nade_image_field.blockSignals(True)
 	self.nade_audio_field.blockSignals(True)
 	self.nade_sentence_field.blockSignals(True)
+	self.nade_sentence_en_field.blockSignals(True)
 	self.query_field.clear()
 	self.target_field.clear()
 	self.nade_image_field.clear()
 	self.nade_audio_field.clear()
 	self.nade_sentence_field.clear()
+	self.nade_sentence_en_field.clear()
 	self.query_field.addItems(fields)
 	self.target_field.addItems(fields)
 	self.nade_image_field.addItems(fields)
 	self.nade_audio_field.addItems(fields)
 	self.nade_sentence_field.addItems(fields)
+	self.nade_sentence_en_field.addItem("")
+	self.nade_sentence_en_field.addItems(fields)
 	self.query_field.setCurrentIndex(_pick_default(fields, ["Expression", "Front", "Word", "Term"]))
 	self.target_field.setCurrentIndex(_pick_default(fields, ["Picture", "Image", "Images", "Back"]))
 	self.nade_image_field.setCurrentIndex(_pick_default(fields, ["Picture", "Image", "Images", "Back"]))
 	self.nade_audio_field.setCurrentIndex(_pick_default(fields, ["Audio", "Sound", "音声"]))
 	self.nade_sentence_field.setCurrentIndex(_pick_default(fields, ["Sentence", "Text", "Front", "Expression"]))
+	en_default = 0
+	for pref in ["Sentence EN", "Sentence Meaning", "English", "Meaning"]:
+		if pref in fields:
+			en_default = fields.index(pref) + 1
+			break
+	self.nade_sentence_en_field.setCurrentIndex(en_default)
 	self.query_field.blockSignals(False)
 	self.target_field.blockSignals(False)
 	self.nade_image_field.blockSignals(False)
 	self.nade_audio_field.blockSignals(False)
 	self.nade_sentence_field.blockSignals(False)
+	self.nade_sentence_en_field.blockSignals(False)
 
 def _toggle_provider_fields(self) -> None:
-	mode = (self.provider_combo.currentText() or "").strip().lower() if hasattr(self, "provider_combo") else "google"
+	mode = _provider_mode_name(self.provider_combo.currentText() if hasattr(self, "provider_combo") else "google")
 	nade = mode == "nadeshiko"
 	# Toggle visibility
 	self.target_field.setVisible(not nade)
@@ -457,6 +503,7 @@ def _toggle_provider_fields(self) -> None:
 		(self._row_nade_img, self.nade_image_field, self.lbl_nade_img),
 		(self._row_nade_audio, self.nade_audio_field, self.lbl_nade_audio),
 		(self._row_nade_sentence, self.nade_sentence_field, self.lbl_nade_sentence),
+		(self._row_nade_sentence_en, self.nade_sentence_en_field, self.lbl_nade_sentence_en),
 	]:
 		try:
 			combo.setVisible(nade)
@@ -466,16 +513,22 @@ def _toggle_provider_fields(self) -> None:
 
 def _on_run(self) -> None:
 	# Selected mode from UI
-	provider_mode = (self.provider_combo.currentText() or "Google").strip().lower() if hasattr(self, "provider_combo") else "google"
-	provider_order = self.cfg.get("provider_preference", ["ddg"]) or ["ddg"]
+	provider_mode = _provider_mode_name(self.provider_combo.currentText() if hasattr(self, "provider_combo") else "google")
+	provider_order = [str(p).strip().lower() for p in (self.cfg.get("provider_preference", ["ddg"]) or ["ddg"]) if str(p).strip()]
 	ddg_client = DuckDuckGoClient(locale=self.cfg.get("ddg_locale", "ja-jp"))
 	yahoo_client = YahooImagesClient()
 	google_key = str(self.cfg.get("google_api_key", "")).strip()
 	google_cx = str(self.cfg.get("google_cx", "")).strip()
-	google_client = GoogleCSEClient(google_key, google_cx) if (google_key and google_cx) else None
+	google_configured = not _is_placeholder_config_value(google_key) and not _is_placeholder_config_value(google_cx)
+	google_client = GoogleCSEClient(google_key, google_cx) if google_configured else None
 	if not provider_order:
 		showWarning("No providers available. Enable DDG or Google.")
 		return
+	if provider_mode == "google":
+		usable_providers = [p for p in provider_order if p in ("ddg", "yahoo") or (p == "google" and google_client is not None)]
+		if not usable_providers:
+			showWarning("Google image backfill has no usable provider. Configure google_api_key and google_cx, or set provider_preference to ddg/yahoo.")
+			return
 
 	query_field = (self.query_field.currentText().strip() if hasattr(self.query_field, "currentText") else str(self.query_field.text()).strip())
 	target_field = (self.target_field.currentText().strip() if hasattr(self.target_field, "currentText") else str(self.target_field.text()).strip())
@@ -491,7 +544,7 @@ def _on_run(self) -> None:
 	elif provider_mode == "gemini":
 		genai_key_check = str(self.cfg.get("google_genai_api_key", "")).strip() or os.environ.get("GEMINI_API_KEY", "").strip()
 		if not genai_key_check:
-			showWarning("Gemini is selected, but google_genai_api_key is missing in config.json (or GEMINI_API_KEY env var)")
+			showWarning("Gemini Image is selected, but google_genai_api_key is missing in config.json (or GEMINI_API_KEY env var)")
 			return
 
 	if not query_field:
@@ -524,6 +577,7 @@ def _on_run(self) -> None:
 	media = self.mw.col.media
 	used_urls: set[str] = set()
 	google_used_in_run = 0
+	google_error: Optional[str] = None
 	for i, nid in enumerate(nids):
 		note = col.get_note(nid)
 		q = get_field_value(note, query_field)
@@ -571,11 +625,17 @@ def _on_run(self) -> None:
 				img_field = (self.nade_image_field.currentText().strip() if hasattr(self, "nade_image_field") else target_field)
 				aud_field = (self.nade_audio_field.currentText().strip() if hasattr(self, "nade_audio_field") else target_field)
 				sent_field = (self.nade_sentence_field.currentText().strip() if hasattr(self, "nade_sentence_field") else query_field)
+				sent_en_field = (self.nade_sentence_en_field.currentText().strip() if hasattr(self, "nade_sentence_en_field") else "")
 				lang = str(self.cfg.get("nadeshiko_sentence_lang", "jp")).lower()
+				lang_en = str(self.cfg.get("nadeshiko_sentence_en_lang", "en")).lower()
 				text = _nade_format_sentence(segment, lang)
+				text_en = _nade_format_sentence(segment, lang_en)
 				changed_sentence = False
 				if sent_field in note and (replace or not note[sent_field]):
 					note[sent_field] = text
+					changed_sentence = True
+				if sent_en_field in note and sent_en_field != sent_field and text_en and (replace or not note[sent_en_field]):
+					note[sent_en_field] = text_en
 					changed_sentence = True
 				img_url = str(urls.get("imageUrl", "") or "").strip()
 				audio_url = str(urls.get("audioUrl", "") or "").strip()
@@ -612,7 +672,7 @@ def _on_run(self) -> None:
 				key = str(self.cfg.get("google_genai_api_key", "")).strip() or os.environ.get("GEMINI_API_KEY", "").strip()
 				if not key:
 					raise Exception("Missing google_genai_api_key or GEMINI_API_KEY")
-				model = str(self.cfg.get("google_genai_model", "models/imagen-4.0-fast-generate-001"))
+				model = str(self.cfg.get("google_genai_model", "gemini-3.1-flash-image"))
 				aspect_ratio = str(self.cfg.get("google_genai_aspect_ratio", "1:1"))
 				person_generation = str(self.cfg.get("google_genai_person_generation", "ALLOW_ALL"))
 				prompt_tmpl = str(self.cfg.get("google_genai_prompt_template", "create an image to demonstrate the meaning of {term}"))
@@ -622,18 +682,18 @@ def _on_run(self) -> None:
 					prompt=prompt,
 					model=model,
 					number_of_images=1,
-					output_mime_type="image/jpeg",
+					output_mime_type="image/png",
 					person_generation=person_generation,
 					aspect_ratio=aspect_ratio,
 				)
 				if imgs:
 					content = imgs[0]
-					filename_hint = ensure_media_filename_safe(f"genai_{nid}.jpg")
+					filename_hint = ensure_media_filename_safe(f"genai_{nid}.png")
 				else:
-					raise Exception("No image returned by Gemini")
+					raise Exception("No image returned by Gemini Image")
 			except Exception as e:
 				last_error = f"GenAI: {e}"
-				showWarning(f"Gemini error: {e}")
+				showWarning(f"Gemini Image error: {e}")
 		else:
 			for provider in provider_order:
 				if provider == "ddg":
@@ -712,6 +772,7 @@ def _on_run(self) -> None:
 							google_used_in_run += 1
 							break
 					except Exception as e:
+						google_error = str(e)
 						last_error = f"Google: {e}"
 
 		if content is None or filename_hint is None:
@@ -720,7 +781,7 @@ def _on_run(self) -> None:
 			continue
 
 		media_name = media.write_data(filename_hint, content)
-		# For generator providers (Gemini), force replace to ensure a visible result
+		# For generator providers (Gemini Image), force replace to ensure a visible result
 		replace_eff = replace if provider_mode == "google" else True
 		if add_image_to_note(note, target_field, media_name, replace=replace_eff):
 			note.flush()
@@ -728,7 +789,7 @@ def _on_run(self) -> None:
 
 	# Save last used UI settings for reviewer hotkey
 	try:
-		provider_mode = (self.provider_combo.currentText() or "Google").strip().lower() if hasattr(self, "provider_combo") else "google"
+		provider_mode = _provider_mode_name(self.provider_combo.currentText() if hasattr(self, "provider_combo") else "google")
 		last = _read_last_settings()
 		last = last or {}
 		# Store per-provider
@@ -747,6 +808,7 @@ def _on_run(self) -> None:
 				"image_field": (self.nade_image_field.currentText().strip() if hasattr(self, "nade_image_field") else ""),
 				"audio_field": (self.nade_audio_field.currentText().strip() if hasattr(self, "nade_audio_field") else ""),
 				"sentence_field": (self.nade_sentence_field.currentText().strip() if hasattr(self, "nade_sentence_field") else ""),
+				"sentence_en_field": (self.nade_sentence_en_field.currentText().strip() if hasattr(self, "nade_sentence_en_field") else ""),
 			})
 			last["nadeshiko"] = last_nade
 		elif provider_mode == "gemini":
@@ -767,7 +829,9 @@ def _on_run(self) -> None:
 	if google_used_in_run:
 		self._increment_google_quota(google_used_in_run)
 		self.quota_label.setText(self._get_quota_display())
-	if provider_mode == "nadeshiko" and updated == 0:
+	if provider_mode == "google" and updated == 0 and google_error:
+		showWarning(f"Updated 0 notes. Google Custom Search failed: {google_error}\n\nCheck google_api_key/google_cx, or remove google from provider_preference.")
+	elif provider_mode == "nadeshiko" and updated == 0:
 		msg = "Updated 0 notes."
 		if nade_no_result:
 			msg += f" No Nadeshiko results for {nade_no_result} note(s)."
@@ -850,8 +914,8 @@ def quick_add_image_for_current_card(mw) -> None:
 
 		key = str(cfg.get("google_api_key", "")).strip()
 		cx = str(cfg.get("google_cx", "")).strip()
-		if not key or not cx:
-			showWarning("Google API key or CX missing in config.json")
+		if _is_placeholder_config_value(key) or _is_placeholder_config_value(cx):
+			showWarning("Google API key or CX is missing or still set to a placeholder in config.json")
 			return
 
 		client = GoogleCSEClient(key, cx)
@@ -924,6 +988,12 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 				if cand in fields:
 					sentence_field = cand
 					break
+		sentence_en_field = str(last_nade.get("sentence_en_field") or cfg.get("nadeshiko_sentence_en_field", "")).strip()
+		if not sentence_en_field:
+			for cand in ["Sentence EN", "Sentence Meaning", "English", "Meaning"]:
+				if cand in fields:
+					sentence_en_field = cand
+					break
 
 		if not query_field or not image_field or not audio_field:
 			showWarning("Could not determine fields to update.")
@@ -963,9 +1033,14 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		# Always write the sentence text, overwriting existing content
 		updated = False
 		lang = str(cfg.get("nadeshiko_sentence_lang", "jp")).lower()
+		lang_en = str(cfg.get("nadeshiko_sentence_en_lang", "en")).lower()
 		text = _nade_format_sentence(segment, lang)
+		text_en = _nade_format_sentence(segment, lang_en)
 		if sentence_field and sentence_field in note:
 			note[sentence_field] = text
+			updated = True
+		if sentence_en_field and sentence_en_field in note and sentence_en_field != sentence_field and text_en:
+			note[sentence_en_field] = text_en
 			updated = True
 
 		urls = segment.get("urls") or {}
@@ -1047,7 +1122,7 @@ def quick_add_google_genai_image_for_current_card(mw) -> None:
 		if not api_key:
 			showWarning("Missing google_genai_api_key in config.json")
 			return
-		model = str(cfg.get("google_genai_model", "models/imagen-4.0-fast-generate-001"))
+		model = str(cfg.get("google_genai_model", "gemini-3.1-flash-image"))
 		aspect_ratio = str(cfg.get("google_genai_aspect_ratio", "1:1"))
 		person_generation = str(cfg.get("google_genai_person_generation", "ALLOW_ALL"))
 		prompt_tmpl = str(cfg.get("google_genai_prompt_template", "create an image to demonstrate the meaning of {term}"))
@@ -1058,7 +1133,7 @@ def quick_add_google_genai_image_for_current_card(mw) -> None:
 			prompt=prompt,
 			model=model,
 			number_of_images=1,
-			output_mime_type="image/jpeg",
+			output_mime_type="image/png",
 			person_generation=person_generation,
 			aspect_ratio=aspect_ratio,
 		)
@@ -1066,7 +1141,7 @@ def quick_add_google_genai_image_for_current_card(mw) -> None:
 			showInfo("No image generated.")
 			return
 		img_bytes = images[0]
-		filename_hint = ensure_media_filename_safe("genai.jpg")
+		filename_hint = ensure_media_filename_safe("genai.png")
 		media_name = col.media.write_data(filename_hint, img_bytes)
 		if add_image_to_note(note, target_field, media_name, replace=True):
 			note.flush()

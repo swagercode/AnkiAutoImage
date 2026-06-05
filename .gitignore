@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
+user_files/
 
 # Local vendoring runs can leave newer package metadata/source files next to the
 # tracked vendor snapshot. Keep tracked vendor files visible, but ignore extras.

@@ -8,6 +8,21 @@ class GoogleCSEError(Exception):
 	pass
 
 
+def _format_google_error(resp: requests.Response) -> str:
+	try:
+		err = (resp.json() or {}).get("error") or {}
+		message = str(err.get("message") or "").strip()
+		status = str(err.get("status") or "").strip()
+		if message and status:
+			return f"HTTP {resp.status_code} {status}: {message}"
+		if message:
+			return f"HTTP {resp.status_code}: {message}"
+	except Exception:
+		pass
+	text = str(resp.text or "").strip()
+	return f"HTTP {resp.status_code}: {text[:500]}"
+
+
 class GoogleCSEClient:
 	"""Google Custom Search JSON API wrapper (image search).
 
@@ -40,7 +55,7 @@ class GoogleCSEClient:
 			params["lr"] = lr
 		resp = self._session.get("https://www.googleapis.com/customsearch/v1", params=params, timeout=30)
 		if resp.status_code != 200:
-			raise GoogleCSEError(f"HTTP {resp.status_code}: {resp.text}")
+			raise GoogleCSEError(_format_google_error(resp))
 		data = resp.json()
 		return data.get("items", [])
 

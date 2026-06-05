@@ -1,6 +1,6 @@
 Param(
     [string]$Package = 'AnkiAutoImage',
-    [string]$Name = 'Auto Images (Google/Nadeshiko/GenAI)',
+    [string]$Name = 'Auto Images',
     [string]$Homepage = 'https://ankiweb.net/shared/addons/',
     [string]$Output = 'AnkiAutoImage.ankiaddon',
     [switch]$SkipVendor
