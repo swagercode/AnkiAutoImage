@@ -7,6 +7,8 @@ Adds media to Anki notes from:
 - Nadeshiko sentence image/audio/text
 - Gemini Image generation through Google GenAI
 
+<img width="847" height="657" alt="image" src="https://github.com/user-attachments/assets/5f3a1d7e-02e0-468b-bf6e-2887e78c4413" />
+
 ## Install
 1. Install the add-on in Anki.
 2. Open `Tools -> AutoImage -> Settings` and add the API keys you use.
@@ -47,9 +49,6 @@ Review hotkeys:
 
 Hotkeys use the last saved fields for that provider. Image Search and Gemini Image hotkeys overwrite the target image field. The Nadeshiko hotkey overwrites image/audio fields and writes sentence text when matching fields are available.
 
-## Example
-
-<img width="847" height="657" alt="image" src="https://github.com/user-attachments/assets/5f3a1d7e-02e0-468b-bf6e-2887e78c4413" />
 
 ## Logs
 - Logs: `user_files/auto-image.log`
