@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+
+# Local vendoring runs can leave newer package metadata/source files next to the
+# tracked vendor snapshot. Keep tracked vendor files visible, but ignore extras.
+vendor/*-*.dist-info/
+vendor/pydantic/experimental/missing_sentinel.py

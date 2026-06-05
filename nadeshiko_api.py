@@ -59,7 +59,7 @@ class NadeshikoApiClient:
 		if category:
 			filters["category"] = category
 		if media_include:
-			filters["media"] = {"include": [{"mediaId": mid} for mid in media_include]}
+			filters["media"] = {"include": [{"mediaPublicId": mid} for mid in media_include]}
 		if filters:
 			payload["filters"] = filters
 
@@ -71,6 +71,6 @@ class NadeshikoApiClient:
 		return data or {}
 
 	def download(self, url: str, timeout: float = 60.0) -> bytes:
-		resp = self._session.get(url, timeout=timeout)
+		resp = requests.get(url, timeout=timeout)
 		resp.raise_for_status()
 		return resp.content
