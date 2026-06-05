@@ -574,6 +574,7 @@ def _on_run(self) -> None:
 	updated = 0
 	empty_queries = 0
 	nade_no_result = 0
+	nade_media_errors = 0
 	media = self.mw.col.media
 	used_urls: set[str] = set()
 	google_used_in_run = 0
@@ -648,6 +649,7 @@ def _on_run(self) -> None:
 						if add_image_to_note(note, img_field, media_name_img, replace=replace):
 							note_changed = True
 					except Exception as e:
+						nade_media_errors += 1
 						self.logger.error(f"Nadeshiko image download failed for '{q}': {e}")
 				if audio_url and aud_field in note:
 					try:
@@ -657,6 +659,7 @@ def _on_run(self) -> None:
 						if add_audio_to_note(note, aud_field, media_name_aud, replace=replace):
 							note_changed = True
 					except Exception as e:
+						nade_media_errors += 1
 						self.logger.error(f"Nadeshiko audio download failed for '{q}': {e}")
 				if changed_sentence:
 					note_changed = True
@@ -831,6 +834,8 @@ def _on_run(self) -> None:
 		self.quota_label.setText(self._get_quota_display())
 	if provider_mode == "google" and updated == 0 and google_error:
 		showWarning(f"Updated 0 notes. Google Custom Search failed: {google_error}\n\nCheck google_api_key/google_cx, or remove google from provider_preference.")
+	elif provider_mode == "nadeshiko" and nade_media_errors:
+		showWarning(f"Updated {updated} notes. Nadeshiko media failed for {nade_media_errors} download(s); see user_files/auto-image.log.")
 	elif provider_mode == "nadeshiko" and updated == 0:
 		msg = "Updated 0 notes."
 		if nade_no_result:
@@ -948,7 +953,6 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 	Always overwrites the target image/audio fields. Uses saved query/target/suffix if available.
 	Config keys used:
 	- nadeshiko_api_key
-	- nadeshiko_base_url (optional)
 	- nadeshiko_image_field (fallback to last target field)
 	- nadeshiko_audio_field (fallback to "Audio"/"Sound"/target field)
 	- nadeshiko_query_suffix (optional; e.g., none)

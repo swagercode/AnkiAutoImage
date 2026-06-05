@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import requests
+
+
+_DOWNLOAD_USER_AGENT = (
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+	"AppleWebKit/537.36 (KHTML, like Gecko) "
+	"Chrome/125.0 Safari/537.36"
+)
 
 
 class NadeshikoApiError(Exception):
@@ -24,9 +32,11 @@ class NadeshikoApiClient:
 		if not api_key:
 			raise NadeshikoApiError("Missing Nadeshiko API key")
 		self._base_url = base_url.rstrip("/")
+		self._base_host = (urlparse(self._base_url).hostname or "").lower()
+		self._auth_header = f"Bearer {api_key}"
 		self._session = requests.Session()
 		self._session.headers.update({
-			"Authorization": f"Bearer {api_key}",
+			"Authorization": self._auth_header,
 			"Content-Type": "application/json",
 			"Accept": "application/json",
 		})
@@ -59,7 +69,7 @@ class NadeshikoApiClient:
 		if category:
 			filters["category"] = category
 		if media_include:
-			filters["media"] = {"include": [{"mediaPublicId": mid} for mid in media_include]}
+			filters["media"] = {"include": [{"mediaId": mid} for mid in media_include]}
 		if filters:
 			payload["filters"] = filters
 
@@ -71,6 +81,10 @@ class NadeshikoApiClient:
 		return data or {}
 
 	def download(self, url: str, timeout: float = 60.0) -> bytes:
-		resp = requests.get(url, timeout=timeout)
+		headers = {"User-Agent": _DOWNLOAD_USER_AGENT, "Accept": "*/*"}
+		host = (urlparse(url).hostname or "").lower()
+		if host == self._base_host or host.endswith(".nadeshiko.co"):
+			headers["Authorization"] = self._auth_header
+		resp = requests.get(url, headers=headers, timeout=timeout)
 		resp.raise_for_status()
 		return resp.content
