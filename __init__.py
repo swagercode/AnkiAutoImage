@@ -4,7 +4,8 @@ from __future__ import annotations
 Anki add-on: Auto Images
 
 Adds two entry points:
-- Tools -> Auto Images (run over a deck)
+- Tools -> AutoImage -> Run (run over a deck)
+- Tools -> AutoImage -> Settings (edit config)
 - Browser -> Edit -> Auto Images (run over selected notes)
 
 Configuration is read from config.json next to this file.
@@ -30,6 +31,12 @@ def _open_tools_dialog() -> None:
 	dialog.exec()
 
 
+def _open_settings_dialog() -> None:
+	from .tools import SettingsDialog
+	dialog = SettingsDialog(parent=mw)
+	dialog.exec()
+
+
 def _open_browser_dialog(browser) -> None:
 	from .tools import BackfillImagesDialog
 	dialog = BackfillImagesDialog(mw=mw, mode="browser", browser=browser)
@@ -37,9 +44,13 @@ def _open_browser_dialog(browser) -> None:
 
 
 def _setup_tools_menu() -> None:
-	action = QAction("Auto Images", mw)
-	qconnect(action.triggered, _open_tools_dialog)
-	mw.form.menuTools.addAction(action)
+	menu = mw.form.menuTools.addMenu("AutoImage")
+	run_action = QAction("Run", mw)
+	qconnect(run_action.triggered, _open_tools_dialog)
+	menu.addAction(run_action)
+	settings_action = QAction("Settings", mw)
+	qconnect(settings_action.triggered, _open_settings_dialog)
+	menu.addAction(settings_action)
 
 
 def _setup_browser_menu_with_gui_hooks() -> bool:
@@ -103,6 +114,10 @@ def _ensure_user_files_dir() -> None:
 def init_addon() -> None:
 	_ensure_user_files_dir()
 	_setup_tools_menu()
+	try:
+		mw.addonManager.setConfigAction(__name__, _open_settings_dialog)
+	except Exception:
+		pass
 	if not _setup_browser_menu_with_gui_hooks():
 		_setup_browser_menu_with_legacy_hook()
 	# Reviewer hotkey (configurable via config.json -> reviewer_hotkey)

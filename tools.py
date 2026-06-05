@@ -12,6 +12,7 @@ except Exception:
 	_TZ_LA = None
 
 from aqt.qt import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QCheckBox, QSpinBox
+from aqt.qt import QDialogButtonBox, QFormLayout, QScrollArea, QWidget
 from aqt.qt import qconnect
 from aqt import mw
 from aqt.utils import showInfo, showWarning
@@ -60,6 +61,36 @@ def _read_config() -> Dict[str, Any]:
         return {}
 
 
+def _read_default_config() -> Dict[str, Any]:
+	try:
+		base_dir = os.path.dirname(__file__)
+		config_path = os.path.join(base_dir, "config.json")
+		with open(config_path, "r", encoding="utf-8") as f:
+			data = json.load(f)
+		return data if isinstance(data, dict) else {}
+	except Exception:
+		return {}
+
+
+def _write_config(data: Dict[str, Any]) -> bool:
+	try:
+		pkg = _addon_package_name()
+		if pkg:
+			mw.addonManager.writeConfig(pkg, data)  # type: ignore[attr-defined]
+			return True
+	except Exception:
+		pass
+	try:
+		base_dir = os.path.dirname(__file__)
+		config_path = os.path.join(base_dir, "config.json")
+		with open(config_path, "w", encoding="utf-8") as f:
+			json.dump(data, f, ensure_ascii=False, indent=1)
+			f.write("\n")
+		return True
+	except Exception:
+		return False
+
+
 def _user_files_dir() -> str:
 	base_dir = os.path.dirname(__file__)
 	user_files_dir = os.path.join(base_dir, "user_files")
@@ -85,6 +116,116 @@ def _write_last_settings(data: Dict[str, Any]) -> None:
 			json.dump(data, f, ensure_ascii=False, indent=1)
 	except Exception:
 		pass
+
+
+class SettingsDialog(QDialog):
+	def __init__(self, parent=None) -> None:
+		super().__init__(parent or mw)
+		self.setWindowTitle("AutoImage Settings")
+		self.defaults = _read_default_config()
+		current = _read_config()
+		self.extra_config = {k: v for k, v in current.items() if k not in self.defaults}
+		self.values = dict(self.defaults)
+		self.values.update({k: v for k, v in current.items() if k in self.defaults})
+		self.widgets: Dict[str, Any] = {}
+		self._build_ui()
+
+	def _build_ui(self) -> None:
+		self.setMinimumWidth(620)
+		self.setMinimumHeight(520)
+		layout = QVBoxLayout(self)
+
+		scroll = QScrollArea(self)
+		scroll.setWidgetResizable(True)
+		body = QWidget(scroll)
+		form = QFormLayout(body)
+		for key, default in self.defaults.items():
+			value = self.values.get(key, default)
+			widget = self._make_widget(default, value)
+			self.widgets[key] = widget
+			form.addRow(QLabel(key), widget)
+		scroll.setWidget(body)
+		layout.addWidget(scroll)
+
+		buttons = QDialogButtonBox(
+			QDialogButtonBox.StandardButton.Save
+			| QDialogButtonBox.StandardButton.Cancel
+			| QDialogButtonBox.StandardButton.RestoreDefaults,
+			self,
+		)
+		qconnect(buttons.accepted, self._save)
+		qconnect(buttons.rejected, self.reject)
+		restore = buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults)
+		if restore is not None:
+			qconnect(restore.clicked, self._restore_defaults)
+		layout.addWidget(buttons)
+
+	def _make_widget(self, default: Any, value: Any):
+		if isinstance(default, bool):
+			widget = QCheckBox(self)
+			widget.setChecked(bool(value))
+			return widget
+		if isinstance(default, int) and not isinstance(default, bool):
+			widget = QSpinBox(self)
+			widget.setRange(-1000000, 1000000)
+			try:
+				widget.setValue(int(value))
+			except Exception:
+				widget.setValue(default)
+			return widget
+		if isinstance(default, list):
+			widget = QLineEdit(self)
+			if isinstance(value, list):
+				widget.setText(", ".join(str(item) for item in value))
+			else:
+				widget.setText(str(value or ""))
+			return widget
+		widget = QLineEdit(self)
+		widget.setText("" if value is None else str(value))
+		return widget
+
+	def _restore_defaults(self) -> None:
+		for key, default in self.defaults.items():
+			self._set_widget_value(self.widgets[key], default)
+
+	def _set_widget_value(self, widget, value: Any) -> None:
+		if isinstance(widget, QCheckBox):
+			widget.setChecked(bool(value))
+		elif isinstance(widget, QSpinBox):
+			try:
+				widget.setValue(int(value))
+			except Exception:
+				widget.setValue(0)
+		elif isinstance(widget, QLineEdit):
+			if isinstance(value, list):
+				widget.setText(", ".join(str(item) for item in value))
+			else:
+				widget.setText("" if value is None else str(value))
+
+	def _value_from_widget(self, key: str, default: Any) -> Any:
+		widget = self.widgets[key]
+		if isinstance(default, bool):
+			return bool(widget.isChecked())
+		if isinstance(default, int) and not isinstance(default, bool):
+			return int(widget.value())
+		if isinstance(default, list):
+			raw = widget.text().strip()
+			return [part.strip() for part in raw.split(",") if part.strip()]
+		raw = widget.text()
+		if default is None:
+			raw = raw.strip()
+			return raw if raw else None
+		return raw
+
+	def _save(self) -> None:
+		data = dict(self.extra_config)
+		for key, default in self.defaults.items():
+			data[key] = self._value_from_widget(key, default)
+		if _write_config(data):
+			showInfo("AutoImage settings saved.")
+			self.accept()
+		else:
+			showWarning("Failed to save AutoImage settings.")
 
 
 class BackfillImagesDialog(QDialog):

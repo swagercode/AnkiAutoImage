@@ -9,8 +9,8 @@ Adds media to Anki notes from:
 
 ## Install
 1. Install the add-on in Anki.
-2. Open `Tools -> Add-ons -> Auto Images -> Config` and add the API keys you use.
-3. Run `Tools -> Auto Images` or `Browser -> Edit -> Auto Images` once before using review hotkeys, so the hotkeys can reuse your selected fields.
+2. Open `Tools -> AutoImage -> Settings` and add the API keys you use.
+3. Run `Tools -> AutoImage -> Run` or `Browser -> Edit -> Auto Images` once before using review hotkeys, so the hotkeys can reuse your selected fields.
 
 ## API Keys
 - Nadeshiko: https://nadeshiko.co/settings/developer
@@ -31,7 +31,7 @@ See [config.json](config.json) for the full default config.
 - `reviewer_hotkey`, `reviewer_hotkey_nadeshiko`, `reviewer_hotkey_genai`: review-mode shortcuts.
 
 ## Usage
-- Open `Tools -> Auto Images` for a deck, or `Browser -> Edit -> Auto Images` for selected notes.
+- Open `Tools -> AutoImage -> Run` for a deck, or `Browser -> Edit -> Auto Images` for selected notes.
 - Choose a `Query Field`.
 - Choose a provider:
   - `Google`: image-search backfill using `provider_preference`.
