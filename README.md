@@ -1,8 +1,6 @@
 > **Disclaimer:** Google image search through Custom Search JSON API / Programmable Search Engine is legacy and fragile. Existing `google_api_key` + `google_cx` setups may keep working until January 1, 2027, but broad Google image search is not expected to be available after that date and Google has not provided a direct Google Images API replacement path. Prefer Nadeshiko for sentence media or Gemini Image for generated images.
 
 # Auto Images - Anki Add-on
-
-[![Release](https://img.shields.io/github/v/release/swagercode/AnkiAutoImage?label=release)](https://github.com/swagercode/AnkiAutoImage/releases)
 [![Downloads](https://img.shields.io/github/downloads/swagercode/AnkiAutoImage/total)](https://github.com/swagercode/AnkiAutoImage/releases)
 [![Issues](https://img.shields.io/github/issues/swagercode/AnkiAutoImage)](https://github.com/swagercode/AnkiAutoImage/issues)
 [![Anki add-on](https://img.shields.io/badge/Anki-add--on-blue)](https://ankiweb.net/shared/info/2105191380)
