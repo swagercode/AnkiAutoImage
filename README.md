@@ -2,7 +2,6 @@
 
 # Auto Images - Anki Add-on
 [![Downloads](https://img.shields.io/github/downloads/swagercode/AnkiAutoImage/total)](https://github.com/swagercode/AnkiAutoImage/releases)
-[![Issues](https://img.shields.io/github/issues/swagercode/AnkiAutoImage)](https://github.com/swagercode/AnkiAutoImage/issues)
 [![Anki add-on](https://img.shields.io/badge/Anki-add--on-blue)](https://ankiweb.net/shared/info/2105191380)
 
 Adds media to Anki notes from:
