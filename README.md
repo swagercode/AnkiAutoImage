@@ -2,6 +2,13 @@
 
 # Auto Images - Anki Add-on
 
+[![Release](https://img.shields.io/github/v/release/swagercode/AnkiAutoImage?label=release)](https://github.com/swagercode/AnkiAutoImage/releases)
+[![Downloads](https://img.shields.io/github/downloads/swagercode/AnkiAutoImage/total)](https://github.com/swagercode/AnkiAutoImage/releases)
+[![Issues](https://img.shields.io/github/issues/swagercode/AnkiAutoImage)](https://github.com/swagercode/AnkiAutoImage/issues)
+[![Last commit](https://img.shields.io/github/last-commit/swagercode/AnkiAutoImage)](https://github.com/swagercode/AnkiAutoImage/commits/main)
+[![Anki add-on](https://img.shields.io/badge/Anki-add--on-blue)](https://apps.ankiweb.net/)
+[![Package](https://img.shields.io/badge/package-.ankiaddon-green)](https://github.com/swagercode/AnkiAutoImage/releases)
+
 Adds media to Anki notes from:
 - Yahoo image backfill, with legacy Google Custom Search support
 - Nadeshiko sentence image/audio/text
