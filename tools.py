@@ -4,6 +4,7 @@ import os
 import json
 from typing import Any, Dict, List, Optional
 import re
+import random
 from datetime import datetime, timedelta
 try:
 	from zoneinfo import ZoneInfo  # Python 3.9+
@@ -180,6 +181,7 @@ class SettingsDialog(QDialog):
 			"nadeshiko_api_key",
 			"nadeshiko_min_length",
 			"nadeshiko_max_length",
+			"nadeshiko_sentence_selection",
 			"nadeshiko_image_field",
 			"nadeshiko_audio_field",
 			"nadeshiko_sentence_lang",
@@ -218,6 +220,7 @@ class SettingsDialog(QDialog):
 		"nadeshiko_api_key": "Nadeshiko API key",
 		"nadeshiko_min_length": "Minimum sentence length",
 		"nadeshiko_max_length": "Maximum sentence length",
+		"nadeshiko_sentence_selection": "Sentence selection",
 		"nadeshiko_image_field": "Default image field",
 		"nadeshiko_audio_field": "Default sentence audio field",
 		"nadeshiko_sentence_lang": "Sentence language",
@@ -243,6 +246,15 @@ class SettingsDialog(QDialog):
 			[
 				("English", "en"),
 				("Japanese", "jp"),
+			],
+		),
+		"nadeshiko_sentence_selection": (
+			False,
+			[
+				("Longest", "longest"),
+				("Random", "random"),
+				("Smallest", "smallest"),
+				("Median", "median"),
 			],
 		),
 		"google_genai_model": (
@@ -886,27 +898,54 @@ def _nade_format_sentence(segment: Dict[str, Any], lang_code: str) -> str:
 	except Exception:
 		return str((segment.get("textJa") or {}).get("content", "") or "").strip()
 
-def _nadeshiko_pick_segment(segments: List[Dict[str, Any]], term: str) -> Optional[Dict[str, Any]]:
-	"""Return the segment with the longest Japanese text content.
+def _nadeshiko_selection_mode(cfg: Dict[str, Any]) -> str:
+	mode = str(cfg.get("nadeshiko_sentence_selection", "longest") or "longest").strip().lower()
+	aliases = {
+		"short": "smallest",
+		"shortest": "smallest",
+		"small": "smallest",
+		"min": "smallest",
+		"minimum": "smallest",
+		"middle": "median",
+	}
+	mode = aliases.get(mode, mode)
+	return mode if mode in {"longest", "random", "smallest", "median"} else "longest"
 
-	Ignores the search term and prefers the segment whose Japanese text
-	(textJa.content or textJa.highlight stripped) is longest.
-	"""
-	best = None
-	best_len = -1
-	for seg in (segments or []):
+
+def _nadeshiko_search_options(cfg: Dict[str, Any]) -> tuple[str, int, str]:
+	mode = _nadeshiko_selection_mode(cfg)
+	if mode == "smallest":
+		return mode, 1, "ASC"
+	if mode == "random":
+		return mode, 10, "RANDOM"
+	if mode == "median":
+		return mode, 25, "NONE"
+	return mode, 1, "DESC"
+
+
+def _nadeshiko_segment_length(segment: Dict[str, Any], lang_code: str) -> int:
+	try:
+		return len(_strip_tags(_nade_format_sentence(segment, lang_code)))
+	except Exception:
+		return 0
+
+
+def _nadeshiko_pick_segment(segments: List[Dict[str, Any]], mode: str, lang_code: str = "jp") -> Optional[Dict[str, Any]]:
+	candidates = [seg for seg in (segments or []) if isinstance(seg, dict)]
+	if not candidates:
+		return None
+	mode = mode if mode in {"longest", "random", "smallest", "median"} else "longest"
+	if mode == "random":
 		try:
-			text_ja = (seg or {}).get("textJa") or {}
-			jp = str(text_ja.get("content", ""))
-			hl = _strip_tags(str(text_ja.get("highlight", "")))
-			cand = jp if len(jp) >= len(hl) else hl
-			l = len(cand)
-			if l > best_len:
-				best = seg
-				best_len = l
+			return random.choice(candidates)
 		except Exception:
-			continue
-	return best if best is not None else (segments[0] if segments else None)
+			return candidates[0]
+	ranked = sorted(candidates, key=lambda seg: _nadeshiko_segment_length(seg, lang_code))
+	if mode == "smallest":
+		return ranked[0]
+	if mode == "median":
+		return ranked[len(ranked) // 2]
+	return ranked[-1]
 
 
 def _collect_field_names(self, nids: List[int]) -> List[str]:
@@ -1110,13 +1149,13 @@ def _on_run(self) -> None:
 					continue
 				base_url = str(self.cfg.get("nadeshiko_base_url", "https://api.nadeshiko.co/v1")).strip() or "https://api.nadeshiko.co/v1"
 				client = NadeshikoApiClient(key, base_url=base_url)
-				# Ask API for the longest sentence, with a sensible minimum length
 				min_len = int(self.cfg.get("nadeshiko_min_length", 6))
 				max_len = int(self.cfg.get("nadeshiko_max_length", 0)) or None
+				selection_mode, search_take, search_sort = _nadeshiko_search_options(self.cfg)
 				res = client.search(
 					query=query_text,
-					take=1,
-					sort_mode="DESC",
+					take=search_take,
+					sort_mode=search_sort,
 					min_length=min_len,
 					max_length=max_len,
 				)
@@ -1124,13 +1163,16 @@ def _on_run(self) -> None:
 				if not segments:
 					nade_no_result += 1
 					continue
-				segment = segments[0]
+				lang = str(self.cfg.get("nadeshiko_sentence_lang", "jp")).lower()
+				segment = _nadeshiko_pick_segment(segments, selection_mode, lang)
+				if not segment:
+					nade_no_result += 1
+					continue
 				urls = segment.get("urls") or {}
 				img_field = (self.nade_image_field.currentText().strip() if hasattr(self, "nade_image_field") else target_field)
 				aud_field = (self.nade_audio_field.currentText().strip() if hasattr(self, "nade_audio_field") else target_field)
 				sent_field = (self.nade_sentence_field.currentText().strip() if hasattr(self, "nade_sentence_field") else query_field)
 				sent_en_field = (self.nade_sentence_en_field.currentText().strip() if hasattr(self, "nade_sentence_en_field") else "")
-				lang = str(self.cfg.get("nadeshiko_sentence_lang", "jp")).lower()
 				lang_en = str(self.cfg.get("nadeshiko_sentence_en_lang", "en")).lower()
 				text = _nade_format_sentence(segment, lang)
 				text_en = _nade_format_sentence(segment, lang_en)
@@ -1554,13 +1596,13 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		suffix_cfg = str(cfg.get("nadeshiko_query_suffix", "")).strip()
 		query_text = f"{q_text} {suffix_cfg}".strip() if suffix_cfg else q_text
 
-		# Ask API for the longest sentence, with a sensible minimum length
 		min_len = int(cfg.get("nadeshiko_min_length", 6))
 		max_len = int(cfg.get("nadeshiko_max_length", 0)) or None
+		selection_mode, search_take, search_sort = _nadeshiko_search_options(cfg)
 		data = client.search(
 			query=query_text,
-			take=1,
-			sort_mode="DESC",
+			take=search_take,
+			sort_mode=search_sort,
 			min_length=min_len,
 			max_length=max_len,
 		)
@@ -1568,11 +1610,14 @@ def quick_add_nadeshiko_for_current_card(mw) -> None:
 		if not segments:
 			showInfo("No Nadeshiko results found.")
 			return
-		segment = segments[0]
 		# Always write the sentence text, overwriting existing content
 		updated = False
 		lang = str(cfg.get("nadeshiko_sentence_lang", "jp")).lower()
 		lang_en = str(cfg.get("nadeshiko_sentence_en_lang", "en")).lower()
+		segment = _nadeshiko_pick_segment(segments, selection_mode, lang)
+		if not segment:
+			showInfo("No Nadeshiko results found.")
+			return
 		text = _nade_format_sentence(segment, lang)
 		text_en = _nade_format_sentence(segment, lang_en)
 		if sentence_field and sentence_field in note:

@@ -20,6 +20,7 @@ class PackageBoundaryTests(unittest.TestCase):
 		cfg = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 
 		self.assertEqual(cfg["provider_preference"], ["yahoo"])
+		self.assertEqual(cfg["nadeshiko_sentence_selection"], "longest")
 		self.assertNotIn("ddg_locale", cfg)
 		for key in ("google_api_key", "google_cx", "google_genai_api_key", "nadeshiko_api_key"):
 			self.assertEqual(cfg[key], "")

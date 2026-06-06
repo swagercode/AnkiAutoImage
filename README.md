@@ -25,7 +25,7 @@ Open `Tools -> AutoImage -> Settings`. The settings UI is also used by Anki's ad
 Tabs:
 - `General`: replace behavior, image-search provider order, and shared query prefix/suffix settings.
 - `Legacy Google`: Google Custom Search API key and Programmable Search engine ID for existing Google setups.
-- `Nadeshiko`: API key, sentence length bounds, default media/sentence fields, sentence languages, and query suffix.
+- `Nadeshiko`: API key, sentence length bounds, sentence selection mode, default media/sentence fields, sentence languages, and query suffix.
 - `Gemini Image`: Gemini API key, image model, aspect ratio, person-generation policy, and prompt template.
 - `Hotkeys`: review-mode shortcuts for image search, Nadeshiko, and Gemini Image.
 
@@ -36,7 +36,7 @@ See [config.json](config.json) for the shipped defaults. Advanced users can stil
 - Choose a `Query Field`.
 - Choose a provider:
   - `Image Search`: image-search backfill using the provider order from Settings.
-  - `Nadeshiko`: image/audio/sentence fields, with optional `Sentence EN Field`.
+  - `Nadeshiko`: image/audio/sentence fields, with optional `Sentence EN Field`. Sentence selection can be `longest`, `random`, `smallest`, or `median`.
   - `Gemini Image`: generated image written to the target field.
 - Click `Run`.
 

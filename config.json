@@ -14,6 +14,7 @@
  "nadeshiko_api_key": "",
  "nadeshiko_min_length": 6,
  "nadeshiko_max_length": 0,
+ "nadeshiko_sentence_selection": "longest",
  "nadeshiko_image_field": null,
  "nadeshiko_audio_field": null,
  "nadeshiko_sentence_lang": "jp",

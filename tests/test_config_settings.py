@@ -42,6 +42,16 @@ class ConfigAndSettingsTests(unittest.TestCase):
 	def test_legacy_google_tab_is_last(self) -> None:
 		self.assertEqual(self.tools.SettingsDialog._TAB_ORDER[-1][0], "Legacy Google")
 
+	def test_nadeshiko_sentence_selection_dropdown_has_expected_modes(self) -> None:
+		dialog = self.tools.SettingsDialog.__new__(self.tools.SettingsDialog)
+		widget = dialog._make_widget("nadeshiko_sentence_selection", "longest", "median")
+
+		labels = [widget.itemText(i) for i in range(widget.count())]
+		values = [widget.itemData(i) for i in range(widget.count())]
+		self.assertEqual(labels, ["Longest (longest)", "Random (random)", "Smallest (smallest)", "Median (median)"])
+		self.assertEqual(values, ["longest", "random", "smallest", "median"])
+		self.assertEqual(widget.currentData(), "median")
+
 	def test_settings_display_and_save_treat_replace_placeholders_as_blank(self) -> None:
 		dialog = self.tools.SettingsDialog.__new__(self.tools.SettingsDialog)
 		dialog.widgets = {"google_api_key": QLineEdit()}
